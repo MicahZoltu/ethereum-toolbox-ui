@@ -1,0 +1,49 @@
+*,
+*::before,
+*::after { 
+	box-sizing: border-box;
+}
+span,
+label {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+}
+label {
+	min-width: 100%;
+	font: inherit;
+}
+span:after,
+label::after,
+label input {
+	width: 100%;
+	min-width: 0;
+	font: inherit;
+	padding: 0px;
+	margin: 0;
+	resize: none;
+	background: none;
+	border: none;
+}
+span::after,
+label::after {
+	content: attr(data-value);
+	visibility: hidden;
+	white-space: pre-wrap;
+	height: 0;
+}
+label input:invalid {
+	background-color: lightpink;
+}
+span:focus-within {
+	outline: auto;
+}
+input:focus {
+	outline: none;
+}
+input[type=password]:not(:placeholder-shown),
+label:after {
+	font-family: 'password-placeholder';
+}
