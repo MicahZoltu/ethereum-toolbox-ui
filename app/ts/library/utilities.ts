@@ -24,9 +24,10 @@ export function bigintToDecimalString(value: bigint, power: bigint): string {
 }
 
 export function decimalStringToBigint(value: string, power: bigint): bigint {
-	if (!/^\d*\.?\d*$/.test(value)) throw new Error(`Value is not a decimal string.`)
+	if (!/^\d*\.?\d*$/.test(value)) throw new Error(`Value is not a decimal sring.`)
 	let [integerPart, fractionalPart] = value.split('.')
-	integerPart = integerPart.padStart(1, '0')
+	// null assertion is safe because the first element of a string.split will always be present when you split by anything other than empty string
+	integerPart = integerPart!.padStart(1, '0')
 	fractionalPart = (fractionalPart || '').slice(0, Number(power)).padEnd(Number(power), '0')
 	return BigInt(`${integerPart}${fractionalPart}`)
 }

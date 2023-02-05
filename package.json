@@ -3,22 +3,29 @@
 	"description": "",
 	"repository": {},
 	"license": "Unlicense",
+	"type": "module",
 	"devDependencies": {
-		"typescript": "4.9.4"
+		"@types/node": "20.1.0",
+		"@zoltu/file-copier": "3.0.0",
+		"typescript": "5.0.4"
 	},
 	"dependencies": {
-		"@noble/hashes": "1.1.5",
+		"@noble/hashes": "1.3.0",
+		"@noble/curves": "1.0.0",
+		"@noble/secp256k1": "2.0.0",
 		"@preact/signals": "1.1.3",
-		"@zoltu/secp256k1": "1.7.1-beta",
+		"@scure/bip32": "1.3.0",
+		"@zoltu/bip39": "1.2.0-1",
+		"@zoltu/ethereum-transactions": "1.0.0",
 		"funtypes": "5.0.3",
 		"micro-web3": "0.1.2",
-		"preact": "10.11.3"
+		"preact": "10.13.2"
 	},
 	"scripts": {
-		"setup": "npm ci --ignore-scripts && cd build && npm ci --ignore-scripts && npm run vendor",
+		"setup": "npm ci --ignore-scripts && tsc && npm run vendor",
 		"build": "tsc",
 		"watch": "tsc --watch",
 		"serve": "npx http-server ./app",
-		"vendor": "cd build && npm run vendor"
+		"vendor": "tsc --project tsconfig.vendor.json && node --enable-source-maps ./build/vendor.mjs && node --input-type=module -e \"import { promises as fs } from 'fs'; await fs.rm('./build/vendor.mjs')\""
 	}
 }

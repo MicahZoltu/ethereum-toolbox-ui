@@ -1,4 +1,4 @@
-import { Shadow } from "../library/Shadow.js";
+import { Shadow } from "./Shadow.js";
 
 export interface SpinnerModel {
 	size?: string

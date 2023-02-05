@@ -4,7 +4,7 @@ import { Select } from './Select.js'
 
 export type TokenSelectorModel = {
 	readonly selectedToken: Signal<TOKENS>
-	readonly onChange?: (newValue: TOKENS) => void
+	readonly onChange?: (newValue: TOKENS, oldValue: TOKENS) => void
 }
 
 export function TokenSelector(model: TokenSelectorModel) {

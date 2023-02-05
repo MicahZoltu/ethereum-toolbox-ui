@@ -10,10 +10,14 @@ export interface RpcChooserModel {
 	readonly style?: JSX.CSSProperties
 }
 export function RpcChooser(model: RpcChooserModel) {
-	const [ url, checkUrlValidity, resetValidity ] = useAsyncState<string>()
-	const internalValue = useSignal('')
+	const { value: url, waitFor: urlWaitFor, reset: resetValidity } = useAsyncState<string>()
+	const existingProvider = model.provider.peek()
+	if (existingProvider) {
+		urlWaitFor(async () => existingProvider.endpoint)
+	}
+	const internalValue = useSignal(existingProvider?.endpoint || '')
 	function testUrl() {
-		checkUrlValidity(async () => {
+		urlWaitFor(async () => {
 			const url = internalValue.value || 'http://localhost:8545'
 			if (!url.startsWith('http://') && !url.startsWith('https://')) throw new Error(`JSON-RPC URL must start with http:// or https://\n${url}`)
 			const response = await fetch(url, { method: 'POST', body: '{ "jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[] }' })
@@ -31,18 +35,18 @@ export function RpcChooser(model: RpcChooserModel) {
 		})
 	}
 	function InnerFragment() {
-		switch (url.state) {
+		switch (url.value.state) {
 			case 'inactive': return <>
 					<label>
 						Ethereum JSON-RPC Server&thinsp;
-						<AutosizingInput type='url' placeholder='http://localhost:8545' value={internalValue} dataList={['http://localhost:8545']} onInput={event => internalValue.value = event.currentTarget.value} style={{ border: '1px dotted', paddingInline: '5px' }}/>
+						<AutosizingInput type='url' placeholder='http://localhost:8545' value={internalValue} dataList={['http://localhost:8545', 'https://ethereum.zoltu.io', 'https://api.securerpc.com/v1']} style={{ border: '1px dotted', paddingInline: '5px' }}/>
 					</label>
 					&thinsp;
 					<button onClick={testUrl}>Test</button>
 				</>
 			case 'pending': return <>Testing {internalValue.value || 'http://localhost:8545'}... <Spinner/></>
-			case 'rejected': return <>{internalValue.value || 'http://localhost:8545'} is not a valid Ethereum JSON-RPC server. <span style={{ color: 'red' }}>{url.error.message}</span><button onClick={resetValidity}>Change</button></>
-			case 'resolved': return <>{url.value} <button onClick={resetValidity}>Change</button></>
+			case 'rejected': return <>{internalValue.value || 'http://localhost:8545'} is not a valid Ethereum JSON-RPC server. <span style={{ color: 'red' }}>{url.value.error.message}</span><button onClick={resetValidity}>Change</button></>
+			case 'resolved': return <>{url.value.value} <button onClick={resetValidity}>Change</button></>
 		}
 	}
 	return <div style={{ height: '22px', ...model.style }}><InnerFragment/></div>

@@ -1,6 +1,6 @@
 import { JSX } from 'preact/jsx-runtime'
 import { Signal, useSignal } from '@preact/signals'
-import { bestPath, txData } from 'micro-web3/api/uniswap-v3'
+import * as Uniswap3 from 'micro-web3/api/uniswap-v3.js'
 import { TOKENS, tokensByName } from '../library/tokens.js'
 import { TokenAndAmount } from './TokenAndAmount.js'
 import { AddressPicker } from './AddressPicker.js'
@@ -26,56 +26,60 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 
 	const sourceToken = useSignal<TOKENS>('WETH')
 	const sourceAmount = useSignal<bigint>(0n)
-	const [ sourceAmountResult, querySourceAmount, _resetSourceAmount ] = useAsyncState()
+	const { value: sourceAmountResult, waitFor: querySourceAmount, reset: _resetSourceAmount } = useAsyncState()
 	const recipient = useSignal<string>('')
 	const targetToken = useSignal<TOKENS>('WETH')
 	const targetAmount = useSignal<bigint>(0n)
-	const [ targetAmountResult, queryTargetAmount, _resetTargetAmount ] = useAsyncState()
+	const { value: targetAmountResult, waitFor: queryTargetAmount, reset: _resetTargetAmount } = useAsyncState()
 	const userSpecifiedValue = useSignal<'source' | 'target'>('source')
-	const lastCalculatedRoute = useSignal<ResolvePromise<ReturnType<typeof bestPath>> | undefined>(undefined)
+	const route = useSignal<ResolvePromise<ReturnType<typeof Uniswap3.bestPath>> | undefined>(undefined)
 
-	const sourceChanged = () => {
+	const sourceAmountChanged = () => {
 		userSpecifiedValue.value = 'source'
 		if (sourceAmount.peek() === 0n) return
 		// TODO: handle async errors
 		queryTargetAmount(async function () {
-			lastCalculatedRoute.value = await bestPath(microWeb3Provider, tokensByName[sourceToken.value].address, tokensByName[targetToken.value].address, sourceAmount.value, undefined)
+			route.value = await Uniswap3.bestPath(microWeb3Provider, tokensByName[sourceToken.peek()].address, tokensByName[targetToken.peek()].address, sourceAmount.peek(), undefined)
 			// set to source again here in case there is a race where the user manages to touch the target before this resolves
 			userSpecifiedValue.value = 'source'
-			if (lastCalculatedRoute.value.amountOut) targetAmount.value = lastCalculatedRoute.value.amountOut
+			const amountOut = route.peek()?.amountOut
+			if (amountOut) targetAmount.value = amountOut
 		})
 	}
 
-	const targetChanged = () => {
+	const targetAmountChanged = () => {
 		userSpecifiedValue.value = 'target'
 		if (targetAmount.peek() === 0n) return
 		// TODO: handle with async errors
 		querySourceAmount(async function () {
-			lastCalculatedRoute.value = await bestPath(microWeb3Provider, tokensByName[sourceToken.value].address, tokensByName[targetToken.value].address, undefined, targetAmount.value)
+			route.value = await Uniswap3.bestPath(microWeb3Provider, tokensByName[sourceToken.peek()].address, tokensByName[targetToken.peek()].address, undefined, targetAmount.peek())
 			// set to source again here in case there is a race where the user manages to touch the source before this resolves
 			userSpecifiedValue.value = 'target'
-			if (lastCalculatedRoute.value.amountIn) sourceAmount.value = lastCalculatedRoute.value.amountIn
+			const amountIn = route.peek()?.amountIn
+			if (amountIn) sourceAmount.value = amountIn
 		})
 	}
 
-	const SourceToken = (sourceAmountResult.state === 'pending') ? <Spinner/> : <TokenAndAmount key='source' token={sourceToken} amount={sourceAmount} onAmountChange={sourceChanged}/>
-	const TargetToken = (targetAmountResult.state === 'pending') ? <Spinner/> : <TokenAndAmount key='target' token={targetToken} amount={targetAmount} onAmountChange={targetChanged}/>
+	// when either token changes, update the 'output' amount
+	const tokenChanged = () => (userSpecifiedValue.value === 'source') ? sourceAmountChanged() : targetAmountChanged()
+
+	const SourceToken = (sourceAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='source' token={sourceToken} amount={sourceAmount} onAmountChange={sourceAmountChanged} onTokenChange={tokenChanged}/>
+	const TargetToken = (targetAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='target' token={targetToken} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={tokenChanged}/>
 
 	function SubmitButton() {
 		const wallet = model.wallet.value
-		if (wallet === undefined || lastCalculatedRoute.value === undefined) {
+		if (wallet === undefined || route.value === undefined) {
 			return <button disabled>Send</button>
 		}
-		// TODO: deal with async exceptions, perhaps move this to AsyncState
-		const onClick = async () => {
-			if (lastCalculatedRoute.value === undefined) return
+		const onClick = () => {
+			if (route.value === undefined) return
 			// TODO: create the router swap transaction payload
 			console.log(`Source Token: ${sourceToken}`)
 			console.log(`Source Amount: ${sourceAmount}`)
 			console.log(`Recipient: ${recipient}`)
 			console.log(`Target Token: ${targetToken}`)
 			console.log(`Target Amount: ${targetAmount}`)
-			const swapTransactionDetails = txData(recipient.value, tokensByName[sourceToken.value].address, tokensByName[targetToken.value].address, lastCalculatedRoute.value, lastCalculatedRoute.value.amountIn, lastCalculatedRoute.value.amountOut, { slippagePercent: 0.05, ttl: 60*60 })
+			const swapTransactionDetails = Uniswap3.txData(recipient.value, tokensByName[sourceToken.value].address, tokensByName[targetToken.value].address, route.value, route.value.amountIn, route.value.amountOut, { slippagePercent: 0.05, ttl: 60*60 })
 			console.log(JSON.stringify(swapTransactionDetails))
 		}
 		return <button onClick={onClick}>Send</button>

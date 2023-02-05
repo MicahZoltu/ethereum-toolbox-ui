@@ -1,26 +1,44 @@
 import { JSX } from 'preact/jsx-runtime'
-import { useComputed, useSignal, useSignalEffect } from '@preact/signals'
-import { Shadow } from '../library/Shadow.js'
+import { Signal, useComputed, useSignal } from '@preact/signals'
+import { Shadow } from './Shadow.js'
+import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
 
-export interface AutosizingInputModel extends Pick<JSX.HTMLAttributes<HTMLSpanElement>, 'className' | 'style'>, Pick<JSX.HTMLAttributes<HTMLInputElement>, 'type' | 'pattern' | 'placeholder' | 'required' | 'value' | 'onInput' | 'onChange' | 'autocomplete'> {
-	readonly value: JSX.SignalLike<string>
+export interface BaseAutosizingInputModel extends Pick<JSX.HTMLAttributes<HTMLSpanElement>, 'className' | 'style'>, Pick<UnparsedInputModel, 'key' | 'type' | 'pattern' | 'placeholder' | 'required' | 'onChange' | 'autocomplete'> {
 	readonly dataList?: string[]
+	readonly rawValue?: Signal<string>
 }
-export function AutosizingInput(model: AutosizingInputModel) {
-	const value = useSignal('')
-	const spaceFiller = useComputed(() => model.type === 'password' ? ''.padEnd(value.value.length, '●') : value.value)
-	const onInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
-		value.value = event.currentTarget.value
-		// https://github.com/preactjs/preact/pull/3867
-		model.onInput && (model as { onInput: (event: JSX.TargetedEvent<HTMLInputElement, Event>) => void }).onInput(event)
-	}
-	useSignalEffect(function() { value.value = model.value.value })
+export interface UnparsedAutosizingInputModel extends BaseAutosizingInputModel, Pick<UnparsedInputModel, 'value' | 'sanitize' | 'tryParse' | 'serialize'> {}
+export interface ParsedAutosizingInputModel<T> extends BaseAutosizingInputModel, Pick<ParsedInputModel<T>, 'value' | 'sanitize' | 'tryParse' | 'serialize'> {}
 
+export function AutosizingInput<T>(model: UnparsedAutosizingInputModel | ParsedAutosizingInputModel<T>) {
+	// TODO: figure out why this signal is getting reset to default value when the Shadow component is rerendered
+	const internalValue = model.rawValue || useSignal(model.serialize ? model.serialize(model.value.peek()) : model.value.peek())
+	const spaceFiller = useComputed(() => model.type === 'password' ? ''.padEnd(internalValue.value.length, '●') : internalValue.value)
+	const inputModel = {
+		rawValue: internalValue,
+		type: model.type,
+		pattern: model.pattern,
+		required: model.required,
+		placeholder: model.placeholder,
+		autocomplete: model.autocomplete,
+		onChange: model.onChange,
+		list: 'datalist',
+		size: 1,
+		...model.serialize ? {
+			value: model.value,
+			sanitize: model.sanitize,
+			tryParse: model.tryParse,
+			serialize: model.serialize,
+		} : {
+			value: model.value,
+			sanitize: model.sanitize,
+		}
+	} satisfies UnparsedInputModel | ParsedInputModel<T>
 	return <Shadow>
 		<link rel='stylesheet' href='css/autosizing-input.css'/>
 		<span className={model.className} style={model.style} data-value={model.placeholder}>
 			<label data-value={spaceFiller}>
-				<input type={model.type} pattern={model.pattern} required={model.required} placeholder={model.placeholder} value={model.value} autocomplete={model.autocomplete} list='datalist' onChange={model.onChange} onInput={onInput} size={1}/>
+				<Input {...inputModel}/>
 				<datalist id='datalist'>
 					{ (model.dataList || []).map(x => <option value={x}/>) }
 				</datalist>

@@ -1,11 +1,10 @@
+import "preact/debug" // remove in production
+import "preact/devtools"
 import * as preact from 'preact'
 import { App, AppModel } from './components/App.js'
-import { createOnChangeProxy } from './library/proxy.js'
 
 // create our root model as a proxy object that will auto-rerender anytime its properties (recursively) change
-const rootModel: AppModel = createOnChangeProxy<AppModel>(rerender, {
-	
-})
+const rootModel = {} satisfies AppModel
 
 // put the root model on the window for debugging convenience
 declare global { interface Window { rootModel: AppModel } }
