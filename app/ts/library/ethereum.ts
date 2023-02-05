@@ -15,7 +15,7 @@ export type IProvider = Pick<Provider, keyof Provider>
 export class Provider {
 	private nextRequestId: number = 1
 	private constructor(
-		private readonly endpoint: string,
+		public readonly endpoint: string,
 		private readonly extraHeaders: Record<string, string>,
 	) {}
 
@@ -42,8 +42,8 @@ export class Provider {
 }
 export function toMicroWeb3(provider: Provider) {
 	return {
-		ethCall: async (args: {to?: string}) => {
-			const unsignedTransaction = EthereumUnsignedTransaction.parse({ ...args, to: args.to || null })
+		ethCall: async (args: {to?: string, data?: string}) => {
+			const unsignedTransaction = EthereumUnsignedTransaction.parse({ ...args, ...args.data ? {input: args.data} : {}, to: args.to || null })
 			const result = await provider.call(unsignedTransaction, 'latest')
 			return serialize(EthereumData, result)
 		},
@@ -56,7 +56,8 @@ export function toMicroWeb3(provider: Provider) {
 }
 
 async function jsonRpcRequest(endpoint: string, request: JsonRpcRequest, extraHeaders: Record<string, string> = {}) {
-	const body = JSON.stringify(request)
+	const serialized = serialize(JsonRpcRequest, request)
+	const body = JSON.stringify(serialized)
 	const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...extraHeaders }, body })
 	if (!response.ok) throw new Error(`${response.status}: ${response.statusText}\n${await response.text()}`)
 	const rawJsonRpcResponse = await response.json() as unknown
