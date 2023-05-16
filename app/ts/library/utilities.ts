@@ -1,3 +1,5 @@
+import { hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
+
 export async function sleep(milliseconds: number) {
 	await new Promise(resolve => setTimeout(resolve, milliseconds))
 }
@@ -30,4 +32,21 @@ export function decimalStringToBigint(value: string, power: bigint): bigint {
 	integerPart = integerPart!.padStart(1, '0')
 	fractionalPart = (fractionalPart || '').slice(0, Number(power)).padEnd(Number(power), '0')
 	return BigInt(`${integerPart}${fractionalPart}`)
+}
+
+export function jsonStringify(value: unknown, space?: string | number | undefined): string {
+    return JSON.stringify(value, (_key, value) => {
+		if (typeof value === 'bigint') return `0x${value.toString(16)}n`
+		if (value instanceof Uint8Array) return `b'${Array.from(value).map(x => x.toString(16).padStart(2, '0')).join('')}'`
+		return value
+    }, space)
+}
+export function jsonParse(text: string): unknown {
+	return JSON.parse(text, (_key: string, value: unknown) => {
+		if (typeof value !== 'string') return value
+		if (/^0x[a-fA-F0-9]+n$/.test(value)) return BigInt(value.slice(0, -1))
+		const bytesMatch = /^b'(:<hex>[a-fA-F0-9])+'$/.exec(value)
+		if (bytesMatch && 'groups' in bytesMatch && bytesMatch.groups && 'hex' in bytesMatch.groups) return hexToBytes(`0x${bytesMatch.groups['hex']}`)
+		return value
+	})
 }

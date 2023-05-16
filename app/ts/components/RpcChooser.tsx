@@ -1,21 +1,23 @@
 import { Signal, useSignal } from "@preact/signals";
 import { JSX } from "preact/jsx-runtime";
-import { Provider } from "../library/ethereum.js";
+import { EthereumClientJsonRpc, IEthereumClient } from "../library/ethereum.js";
 import { useAsyncState } from "../library/preact-utilities.js";
 import { AutosizingInput } from "./AutosizingInput.js";
 import { Spinner } from "./Spinner.js";
 
 export interface RpcChooserModel {
-	readonly provider: Signal<Provider | undefined>
+	readonly ethereumClient: Signal<IEthereumClient | undefined>
 	readonly style?: JSX.CSSProperties
 }
 export function RpcChooser(model: RpcChooserModel) {
 	const { value: url, waitFor: urlWaitFor, reset: resetValidity } = useAsyncState<string>()
-	const existingProvider = model.provider.peek()
-	if (existingProvider) {
-		urlWaitFor(async () => existingProvider.endpoint)
+	const existingProvider = model.ethereumClient.peek()
+
+	// try to use the existing provider's endpoint (if it exists)
+	if (existingProvider && 'endpoint' in existingProvider && typeof existingProvider.endpoint === 'string') {
+		urlWaitFor(async () => existingProvider.endpoint as string)
 	}
-	const internalValue = useSignal(existingProvider?.endpoint || '')
+	const internalValue = useSignal((existingProvider as {endpoint: string} | undefined)?.endpoint || '')
 	function testUrl() {
 		urlWaitFor(async () => {
 			const url = internalValue.value || 'http://localhost:8545'
@@ -30,7 +32,7 @@ export function RpcChooser(model: RpcChooserModel) {
 				|| typeof json.result !== 'string'
 				|| !json.result.startsWith('0x')
 			) throw new Error(`Unexpected result from server: ${await response.text()}`)
-			model.provider.value = await Provider.create(url)
+			model.ethereumClient.value = await EthereumClientJsonRpc.create(url)
 			return url
 		})
 	}

@@ -189,7 +189,7 @@ export const EthereumSignedTransactionLegacy = 	t.Intersect(
 		gas: EthereumQuantity,
 		to: t.Union(EthereumAddress, t.Null),
 		value: EthereumQuantity,
-		input: EthereumInput,
+		data: EthereumInput,
 		r: EthereumQuantity,
 		s: EthereumQuantity,
 		v: EthereumQuantity,
@@ -210,7 +210,7 @@ export const EthereumSignedTransaction2930 = t.Intersect(
 		gas: EthereumQuantity,
 		to: t.Union(EthereumAddress, t.Null),
 		value: EthereumQuantity,
-		input: EthereumInput,
+		data: EthereumInput,
 		chainId: EthereumQuantity,
 		r: EthereumQuantity,
 		s: EthereumQuantity,
@@ -236,7 +236,7 @@ export const EthereumSignedTransaction1559 = t.Intersect(
 		gas: EthereumQuantity,
 		to: t.Union(EthereumAddress, t.Null),
 		value: EthereumQuantity,
-		input: EthereumInput,
+		data: EthereumInput,
 		chainId: EthereumQuantity,
 		r: EthereumQuantity,
 		s: EthereumQuantity,
@@ -281,7 +281,7 @@ export const EthereumUnsignedTransaction1559 = t.Intersect(
 		maxPriorityFeePerGas: EthereumQuantity,
 		gas: EthereumQuantity,
 		value: EthereumQuantity,
-		input: EthereumInput,
+		data: EthereumInput,
 		chainId: EthereumQuantity,
 		accessList: EthereumAccessList,
 	}),
@@ -422,26 +422,23 @@ export const JsonRpcResponse = t.Union(JsonRpcErrorResponse, JsonRpcSuccessRespo
 export type JsonRpcMessage = t.Static<typeof JsonRpcMessage>
 export const JsonRpcMessage = t.Union(JsonRpcResponse, JsonRpcNotification, JsonRpcRequestBase)
 
+export type EthAccountsParameters = t.Static<typeof EthAccountsParameters>
+export const EthAccountsParameters = t.ReadonlyTuple()
+export type EthAccountsRequest = t.Static<typeof EthAccountsRequest>
+export const EthAccountsRequest = t.ReadonlyObject({ method: t.Literal('eth_accounts') })
+export type EthAccountsJsonRpcRequest = t.Static<typeof EthAccountsJsonRpcRequest>
+export const EthAccountsJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthAccountsRequest)
+export type EthAccountsResult = t.Static<typeof EthAccountsResult>
+export const EthAccountsResult = t.ReadonlyArray(EthereumAddress)
+
+export type EthBlockNumberParameters = t.Static<typeof EthBlockNumberParameters>
+export const EthBlockNumberParameters = t.ReadonlyTuple()
 export type EthBlockNumberRequest = t.Static<typeof EthBlockNumberRequest>
 export const EthBlockNumberRequest = t.ReadonlyObject({ method: t.Literal('eth_blockNumber') })
 export type EthBlockNumberJsonRpcRequest = t.Static<typeof EthBlockNumberJsonRpcRequest>
 export const EthBlockNumberJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthBlockNumberRequest)
-
-export type EthGetBalanceParameters = t.Static<typeof EthGetBalanceParameters>
-export const EthGetBalanceParameters = t.ReadonlyTuple(EthereumAddress, EthereumBlockTag)
-export type EthGetBalanceRequest = t.Static<typeof EthGetBalanceRequest>
-export const EthGetBalanceRequest = t.ReadonlyObject({ method: t.Literal('eth_getBalance'), params: EthGetBalanceParameters})
-export type EthGetBalanceJsonRpcRequest = t.Static<typeof EthGetBalanceJsonRpcRequest>
-export const EthGetBalanceJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetBalanceRequest)
-
-export type EthEstimateGasParameters = t.Static<typeof EthEstimateGasParameters>
-export const EthEstimateGasParameters = t.ReadonlyTuple(EthereumUnsignedTransaction, EthereumBlockTag)
-export type EthEstimateGasRequest = t.Static<typeof EthEstimateGasRequest>
-export const EthEstimateGasRequest = t.ReadonlyObject({ method: t.Literal('eth_estimateGas'), params: EthEstimateGasParameters})
-export type EthEstimateGasJsonRpcRequest = t.Static<typeof EthEstimateGasJsonRpcRequest>
-export const EthEstimateGasJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthEstimateGasRequest)
-export type EthEstimateGasResult = t.Static<typeof EthEstimateGasResult>
-export const EthEstimateGasResult = EthereumQuantity
+export type EthBlockNumberResult = t.Static<typeof EthBlockNumberResult>
+export const EthBlockNumberResult = EthereumQuantity
 
 export type EthCallParameters = t.Static<typeof EthCallParameters>
 export const EthCallParameters = t.ReadonlyTuple(EthereumUnsignedTransaction, EthereumBlockTag)
@@ -452,12 +449,89 @@ export const EthCallJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthCallRequ
 export type EthCallResult = t.Static<typeof EthCallResult>
 export const EthCallResult = EthereumData
 
-export type EthSendTransactionParameters = t.Static<typeof EthSendTransactionParameters>
-export const EthSendTransactionParameters = t.ReadonlyTuple(EthereumUnsignedTransaction)
-export type EthSendTransactionRequest = t.Static<typeof EthSendTransactionRequest>
-export const EthSendTransactionRequest = t.ReadonlyObject({ method: t.Literal('eth_sendTransaction'), params: EthSendTransactionParameters })
-export type EthSendTransactionJsonRpcRequest = t.Static<typeof EthSendTransactionJsonRpcRequest>
-export const EthSendTransactionJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthSendTransactionRequest)
+export type EthChainIdParameters = t.Static<typeof EthChainIdParameters>
+export const EthChainIdParameters = t.ReadonlyTuple()
+export type EthChainIdRequest = t.Static<typeof EthChainIdRequest>
+export const EthChainIdRequest = t.ReadonlyObject({ method: t.Literal('eth_chainId'), params: EthChainIdParameters })
+export type EthChainIdJsonRpcRequest = t.Static<typeof EthChainIdJsonRpcRequest>
+export const EthChainIdJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthChainIdRequest)
+export type EthChainIdResult = t.Static<typeof EthChainIdResult>
+export const EthChainIdResult = EthereumQuantity
+
+export type EthEstimateGasParameters = t.Static<typeof EthEstimateGasParameters>
+export const EthEstimateGasParameters = t.ReadonlyTuple(EthereumUnsignedTransaction, EthereumBlockTag)
+export type EthEstimateGasRequest = t.Static<typeof EthEstimateGasRequest>
+export const EthEstimateGasRequest = t.ReadonlyObject({ method: t.Literal('eth_estimateGas'), params: EthEstimateGasParameters})
+export type EthEstimateGasJsonRpcRequest = t.Static<typeof EthEstimateGasJsonRpcRequest>
+export const EthEstimateGasJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthEstimateGasRequest)
+export type EthEstimateGasResult = t.Static<typeof EthEstimateGasResult>
+export const EthEstimateGasResult = EthereumQuantity
+
+export type EthGetBalanceParameters = t.Static<typeof EthGetBalanceParameters>
+export const EthGetBalanceParameters = t.ReadonlyTuple(EthereumAddress, EthereumBlockTag)
+export type EthGetBalanceRequest = t.Static<typeof EthGetBalanceRequest>
+export const EthGetBalanceRequest = t.ReadonlyObject({ method: t.Literal('eth_getBalance'), params: EthGetBalanceParameters})
+export type EthGetBalanceJsonRpcRequest = t.Static<typeof EthGetBalanceJsonRpcRequest>
+export const EthGetBalanceJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetBalanceRequest)
+export type EthGetBalanceResult = t.Static<typeof EthGetBalanceResult>
+export const EthGetBalanceResult = EthereumQuantity
+
+export type EthGetBlockByNumberParameters = t.Static<typeof EthGetBlockByNumberParameters>
+export const EthGetBlockByNumberParameters = t.ReadonlyTuple(EthereumBlockTag, t.Boolean)
+export type EthGetBlockByNumberRequest = t.Static<typeof EthGetBlockByNumberRequest>
+export const EthGetBlockByNumberRequest = t.ReadonlyObject({ method: t.Literal('eth_getBlockByNumber'), params: EthGetBlockByNumberParameters})
+export type EthGetBlockByNumberJsonRpcRequest = t.Static<typeof EthGetBlockByNumberJsonRpcRequest>
+export const EthGetBlockByNumberJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetBlockByNumberRequest)
+export type EthGetBlockByNumberResult = t.Static<typeof EthGetBlockByNumberResult>
+export const EthGetBlockByNumberResult = t.Union(EthereumBlockHeaderWithTransactionHashes, EthereumBlockHeaderWithTransactions)
+
+export type EthGetLogsParameters = t.Static<typeof EthGetLogsParameters>
+export const EthGetLogsParameters = t.Intersect(
+	t.Union(
+		t.ReadonlyObject({ blockHash: EthereumBytes32 }),
+		t.ReadonlyObject({ fromBlock: EthereumQuantity, toBlock: t.Union(EthereumQuantity, t.Literal('latest')) }),
+	),
+	t.ReadonlyPartial({
+		address: EthereumAddress,
+		topics: t.ReadonlyArray(t.Union(EthereumBytes32, t.ReadonlyArray(EthereumBytes32))),
+	})
+)
+export type EthGetLogsRequest = t.Static<typeof EthGetLogsRequest>
+export const EthGetLogsRequest = t.ReadonlyObject({ method: t.Literal(''), params: EthGetLogsParameters })
+export type EthGetLogsJsonRpcRequest = t.Static<typeof EthGetLogsJsonRpcRequest>
+export const EthGetLogsJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetLogsRequest)
+export type EthGetLogsResult = t.Static<typeof EthGetLogsResult>
+export const EthGetLogsResult = t.ReadonlyArray(EthereumLog)
+
+export type EthGetStorageAtParameters = t.Static<typeof EthGetStorageAtParameters>
+export const EthGetStorageAtParameters = t.ReadonlyTuple(EthereumAddress, EthereumQuantity)
+export type EthGetStorageAtRequest = t.Static<typeof EthGetStorageAtRequest>
+export const EthGetStorageAtRequest = t.ReadonlyObject({ method: t.Literal(''), params: EthGetStorageAtParameters })
+export type EthGetStorageAtJsonRpcRequest = t.Static<typeof EthGetStorageAtJsonRpcRequest>
+export const EthGetStorageAtJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetStorageAtRequest)
+export type EthGetStorageAtResult = t.Static<typeof EthGetStorageAtResult>
+export const EthGetStorageAtResult = t.Union(
+	EthereumBytes32,
+	t.String.withParser({ parse: x => x === '0x' ? { success: true, value: null } : { success: false, message: `eth_getStorageAt didn't return 32 bytes of data nor 0x.` } }),
+)
+
+export type EthGetTransactionByHashParameters = t.Static<typeof EthGetTransactionByHashParameters>
+export const EthGetTransactionByHashParameters = t.ReadonlyTuple(EthereumBytes32)
+export type EthGetTransactionByHashRequest = t.Static<typeof EthGetTransactionByHashRequest>
+export const EthGetTransactionByHashRequest = t.ReadonlyObject({ method: t.Literal('eth_getTransactionByHash'), params: EthGetTransactionByHashParameters })
+export type EthGetTransactionByHashJsonRpcRequest = t.Static<typeof EthGetTransactionByHashJsonRpcRequest>
+export const EthGetTransactionByHashJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetTransactionByHashRequest)
+export type EthGetTransactionByHashResult = t.Static<typeof EthGetTransactionByHashResult>
+export const EthGetTransactionByHashResult = EthereumSignedTransaction
+
+export type EthGetTransactionCountParameters = t.Static<typeof EthGetTransactionCountParameters>
+export const EthGetTransactionCountParameters = t.ReadonlyTuple(EthereumAddress, EthereumBlockTag)
+export type EthGetTransactionCountRequest = t.Static<typeof EthGetTransactionCountRequest>
+export const EthGetTransactionCountRequest = t.ReadonlyObject({ method: t.Literal('eth_getTransactionCount'), params: EthGetTransactionCountParameters })
+export type EthGetTransactionCountJsonRpcRequest = t.Static<typeof EthGetTransactionCountJsonRpcRequest>
+export const EthGetTransactionCountJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetTransactionCountRequest)
+export type EthGetTransactionCountResult = t.Static<typeof EthGetTransactionCountResult>
+export const EthGetTransactionCountResult = EthereumQuantity
 
 export type EthGetTransactionReceiptParameters = t.Static<typeof EthGetTransactionReceiptParameters>
 export const EthGetTransactionReceiptParameters = t.ReadonlyTuple(EthereumBytes32)
@@ -494,75 +568,68 @@ export const EthTransactionReceiptResult = t.Union(
 	})
 )
 
-export type EthGetBlockByNumberParameters = t.Static<typeof EthGetBlockByNumberParameters>
-export const EthGetBlockByNumberParameters = t.ReadonlyTuple(EthereumBlockTag, t.Boolean)
-export type EthGetBlockByNumberRequest = t.Static<typeof EthGetBlockByNumberRequest>
-export const EthGetBlockByNumberRequest = t.ReadonlyObject({ method: t.Literal('eth_getBlockByNumber'), params: EthGetBlockByNumberParameters})
-export type EthGetBlockByNumberJsonRpcRequest = t.Static<typeof EthGetBlockByNumberJsonRpcRequest>
-export const EthGetBlockByNumberJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetBlockByNumberRequest)
+export type EthRequestAccountsParameters = t.Static<typeof EthRequestAccountsParameters>
+export const EthRequestAccountsParameters = t.ReadonlyTuple()
+export type EthRequestAccountsRequest = t.Static<typeof EthRequestAccountsRequest>
+export const EthRequestAccountsRequest = t.ReadonlyObject({ method: t.Literal('eth_requestAccounts') })
+export type EthRequestAccountsJsonRpcRequest = t.Static<typeof EthRequestAccountsJsonRpcRequest>
+export const EthRequestAccountsJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthRequestAccountsRequest)
+export type EthRequestAccountsResult = t.Static<typeof EthRequestAccountsResult>
+export const EthRequestAccountsResult = t.ReadonlyArray(EthereumAddress)
 
-export type EthGetTransactionByHashParameters = t.Static<typeof EthGetTransactionByHashParameters>
-export const EthGetTransactionByHashParameters = t.ReadonlyTuple(EthereumBytes32)
-export type EthGetTransactionByHashRequest = t.Static<typeof EthGetTransactionByHashRequest>
-export const EthGetTransactionByHashRequest = t.ReadonlyObject({ method: t.Literal('eth_getTransactionByHash'), params: EthGetTransactionByHashParameters })
-export type EthGetTransactionByHashJsonRpcRequest = t.Static<typeof EthGetTransactionByHashJsonRpcRequest>
-export const EthGetTransactionByHashJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetTransactionByHashRequest)
+export type EthSendRawTransactionParameters = t.Static<typeof EthSendRawTransactionParameters>
+export const EthSendRawTransactionParameters = t.ReadonlyTuple(EthereumData)
+export type EthSendRawTransactionRequest = t.Static<typeof EthSendRawTransactionRequest>
+export const EthSendRawTransactionRequest = t.ReadonlyObject({ method: t.Literal('eth_sendRawTransaction'), params: EthSendRawTransactionParameters })
+export type EthSendRawTransactionJsonRpcRequest = t.Static<typeof EthSendRawTransactionJsonRpcRequest>
+export const EthSendRawTransactionJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthSendRawTransactionRequest)
+export type EthSendRawTransactionResult = t.Static<typeof EthSendRawTransactionResult>
+export const EthSendRawTransactionResult = EthereumBytes32
 
-export type EthGetStorageAtParameters = t.Static<typeof EthGetStorageAtParameters>
-export const EthGetStorageAtParameters = t.ReadonlyTuple(EthereumAddress, EthereumQuantity)
-export type EthGetStorageAtRequest = t.Static<typeof EthGetStorageAtRequest>
-export const EthGetStorageAtRequest = t.ReadonlyObject({ method: t.Literal(''), params: EthGetStorageAtParameters })
-export type EthGetStorageAtJsonRpcRequest = t.Static<typeof EthGetStorageAtJsonRpcRequest>
-export const EthGetStorageAtJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetStorageAtRequest)
-export type EthGetStorageAtResult = t.Static<typeof EthGetStorageAtResult>
-export const EthGetStorageAtResult = t.Union(
-	EthereumBytes32,
-	t.String.withParser({ parse: x => x === '0x' ? { success: true, value: null } : { success: false, message: `eth_getStorageAt didn't return 32 bytes of data nor 0x.` } }),
-)
-
-export type EthGetLogsParameters = t.Static<typeof EthGetLogsParameters>
-export const EthGetLogsParameters = t.Intersect(
-	t.Union(
-		t.ReadonlyObject({ blockHash: EthereumBytes32 }),
-		t.ReadonlyObject({ fromBlock: EthereumQuantity, toBlock: t.Union(EthereumQuantity, t.Literal('latest')) }),
-	),
-	t.ReadonlyPartial({
-		address: EthereumAddress,
-		topics: t.ReadonlyArray(t.Union(EthereumBytes32, t.ReadonlyArray(EthereumBytes32))),
-	})
-)
-export type EthGetLogsRequest = t.Static<typeof EthGetLogsRequest>
-export const EthGetLogsRequest = t.ReadonlyObject({ method: t.Literal(''), params: EthGetLogsParameters })
-export type EthGetLogsJsonRpcRequest = t.Static<typeof EthGetLogsJsonRpcRequest>
-export const EthGetLogsJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetLogsRequest)
-export type EthGetLogsResult = t.Static<typeof EthGetLogsResult>
-export const EthGetLogsResult = t.ReadonlyArray(EthereumLog)
+export type EthSendTransactionParameters = t.Static<typeof EthSendTransactionParameters>
+export const EthSendTransactionParameters = t.ReadonlyTuple(EthereumUnsignedTransaction)
+export type EthSendTransactionRequest = t.Static<typeof EthSendTransactionRequest>
+export const EthSendTransactionRequest = t.ReadonlyObject({ method: t.Literal('eth_sendTransaction'), params: EthSendTransactionParameters })
+export type EthSendTransactionJsonRpcRequest = t.Static<typeof EthSendTransactionJsonRpcRequest>
+export const EthSendTransactionJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthSendTransactionRequest)
+export type EthSendTransactionResult = t.Static<typeof EthSendTransactionResult>
+export const EthSendTransactionResult = EthereumBytes32
 
 export type EthereumRequest = t.Static<typeof EthereumRequest>
 export const EthereumRequest = t.Union(
+	EthAccountsRequest,
 	EthBlockNumberRequest,
-	EthGetBalanceRequest,
-	EthEstimateGasRequest,
 	EthCallRequest,
-	EthSendTransactionRequest,
-	EthGetTransactionReceiptRequest,
+	EthChainIdRequest,
+	EthEstimateGasRequest,
+	EthGetBalanceRequest,
 	EthGetBlockByNumberRequest,
-	EthGetTransactionByHashRequest,
-	EthGetStorageAtRequest,
 	EthGetLogsRequest,
+	EthGetStorageAtRequest,
+	EthGetTransactionByHashRequest,
+	EthGetTransactionCountRequest,
+	EthGetTransactionReceiptRequest,
+	EthRequestAccountsRequest,
+	EthSendRawTransactionRequest,
+	EthSendTransactionRequest,
 )
 export type JsonRpcRequest = t.Static<typeof JsonRpcRequest>
 export const JsonRpcRequest = t.Union(
+	EthAccountsJsonRpcRequest,
 	EthBlockNumberJsonRpcRequest,
-	EthGetBalanceJsonRpcRequest,
-	EthEstimateGasJsonRpcRequest,
 	EthCallJsonRpcRequest,
-	EthSendTransactionJsonRpcRequest,
-	EthGetTransactionReceiptJsonRpcRequest,
+	EthChainIdJsonRpcRequest,
+	EthEstimateGasJsonRpcRequest,
+	EthGetBalanceJsonRpcRequest,
 	EthGetBlockByNumberJsonRpcRequest,
-	EthGetTransactionByHashJsonRpcRequest,
-	EthGetStorageAtJsonRpcRequest,
 	EthGetLogsJsonRpcRequest,
+	EthGetStorageAtJsonRpcRequest,
+	EthGetTransactionByHashJsonRpcRequest,
+	EthGetTransactionCountJsonRpcRequest,
+	EthGetTransactionReceiptJsonRpcRequest,
+	EthRequestAccountsJsonRpcRequest,
+	EthSendRawTransactionJsonRpcRequest,
+	EthSendTransactionJsonRpcRequest,
 )
 
 //
@@ -677,10 +744,4 @@ export const Eip2612Message = t.ReadonlyObject({
 		nonce: t.Number,
 		deadline: t.Number,
 	}),
-})
-
-export type GetTransactionCountRequest = t.Static<typeof GetTransactionCountRequest>
-export const GetTransactionCountRequest = t.ReadonlyObject({
-	method: t.Literal('eth_getTransactionCount'),
-	params: t.ReadonlyTuple(EthereumAddress, EthereumBlockTag)
 })
