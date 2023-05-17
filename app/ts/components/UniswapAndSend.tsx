@@ -19,11 +19,11 @@ export type UniswapAndSendModel = {
 export function UniswapAndSend(model: UniswapAndSendModel) {
 	const microWeb3Provider = toMicroWeb3(model.wallet.ethereumClient)
 
-	const sourceToken = useSignal<TOKENS>('WETH')
+	const sourceTokenSignal = useSignal<TOKENS>('ETH')
 	const sourceAmount = useSignal<bigint>(0n)
 	const { value: sourceAmountResult, waitFor: querySourceAmount, reset: _resetSourceAmount } = useAsyncState()
 	const recipient = useSignal<bigint | undefined>(undefined)
-	const targetToken = useSignal<TOKENS>('WETH')
+	const targetTokenSignal = useSignal<TOKENS>('USDC')
 	const targetAmount = useSignal<bigint>(0n)
 	const { value: targetAmountResult, waitFor: queryTargetAmount, reset: _resetTargetAmount } = useAsyncState()
 	const userSpecifiedValue = useSignal<'source' | 'target'>('source')
@@ -35,7 +35,11 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 		if (sourceAmount.peek() === 0n) return
 		queryTargetAmount(async function () {
 			try {
-				route.value = await Uniswap3.bestPath(microWeb3Provider, tokensByName[sourceToken.peek()].address, tokensByName[targetToken.peek()].address, sourceAmount.peek(), undefined)
+				const sourceToken = sourceTokenSignal.peek()
+				const source = sourceToken === 'ETH' ? 'eth' : tokensByName[sourceToken].address
+				const targetToken = targetTokenSignal.peek()
+				const target = targetToken === 'ETH' ? 'eth' : tokensByName[targetToken].address
+				route.value = await Uniswap3.bestPath(microWeb3Provider, source, target, sourceAmount.peek(), undefined)
 				// set to source again here in case there is a race where the user manages to touch the target before this resolves
 				userSpecifiedValue.value = 'source'
 				const amountOut = route.peek()?.amountOut
@@ -51,7 +55,11 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 		if (targetAmount.peek() === 0n) return
 		querySourceAmount(async function () {
 			try {
-				route.value = await Uniswap3.bestPath(microWeb3Provider, tokensByName[sourceToken.peek()].address, tokensByName[targetToken.peek()].address, undefined, targetAmount.peek())
+				const sourceToken = sourceTokenSignal.peek()
+				const source = sourceToken === 'ETH' ? 'eth' : tokensByName[sourceToken].address
+				const targetToken = targetTokenSignal.peek()
+				const target = targetToken === 'ETH' ? 'eth' : tokensByName[targetToken].address
+				route.value = await Uniswap3.bestPath(microWeb3Provider, source, target, undefined, targetAmount.peek())
 				// set to source again here in case there is a race where the user manages to touch the source before this resolves
 				userSpecifiedValue.value = 'target'
 				const amountIn = route.peek()?.amountIn
@@ -65,11 +73,12 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 	// when either token changes, update the 'output' amount
 	const tokenChanged = () => (userSpecifiedValue.value === 'source') ? sourceAmountChanged() : targetAmountChanged()
 
-	const SourceToken = (sourceAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='source' token={sourceToken} amount={sourceAmount} onAmountChange={sourceAmountChanged} onTokenChange={tokenChanged}/>
-	const TargetToken = (targetAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='target' token={targetToken} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={tokenChanged}/>
+	const SourceToken = (sourceAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='source' token={sourceTokenSignal} amount={sourceAmount} onAmountChange={sourceAmountChanged} onTokenChange={tokenChanged}/>
+	const TargetToken = (targetAmountResult.value.state === 'pending') ? <Spinner/> : <TokenAndAmount key='target' token={targetTokenSignal} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={tokenChanged}/>
 
 	function SubmitButton() {
-		if (route.value === undefined) {
+		// FIXME: if recipient is changed/cleared (but not valid) the send button remains accessible and will send to last known good recipient
+		if (model.wallet.readonly || route.value === undefined || recipient.value === undefined) {
 			return <button disabled>Send</button>
 		}
 		const onClick = () => waitForSend(async () => {
@@ -77,7 +86,11 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 			if (wallet.readonly) return
 			if (route.value === undefined) return
 			if (recipient.value === undefined) return
-			const swapTransactionDetails = Uniswap3.txData(addressBigintToHex(recipient.value), tokensByName[sourceToken.value].address, tokensByName[targetToken.value].address, route.value, userSpecifiedValue.value === 'source' ? sourceAmount.value : undefined, userSpecifiedValue.value === 'target' ? targetAmount.value : undefined, { slippagePercent: 0.05, ttl: 60*60 })
+			const sourceToken = sourceTokenSignal.peek()
+			const source = sourceToken === 'ETH' ? 'eth' : tokensByName[sourceToken].address
+			const targetToken = targetTokenSignal.peek()
+			const target = targetToken === 'ETH' ? 'eth' : tokensByName[targetToken].address
+			const swapTransactionDetails = Uniswap3.txData(addressBigintToHex(recipient.value), source, target, route.value, userSpecifiedValue.value === 'source' ? sourceAmount.value : undefined, userSpecifiedValue.value === 'target' ? targetAmount.value : undefined, { slippagePercent: 0.05, ttl: 60*60 })
 			if ('allowance' in swapTransactionDetails && swapTransactionDetails.allowance !== undefined) {
 				const allowance = await contract(ERC20, microWeb3Provider, swapTransactionDetails.allowance.token).allowance.call({ owner: addressBigintToHex(wallet.address), spender: UNISWAP_V3_ROUTER_CONTRACT })
 				if (allowance < swapTransactionDetails.allowance.amount) {
@@ -95,10 +108,24 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 				data: swapTransactionDetails.data as Uint8Array,
 			})
 		})
-		return <button onClick={onClick} disabled={model.wallet.readonly}>Send</button>
+		return sendResult.value.state === 'pending'
+			? <Spinner/>
+			: <button onClick={onClick} disabled={model.wallet.readonly}>Send</button>
 	}
+
+	function Refresh() {
+		const onClick = () => {
+			if (userSpecifiedValue.value === 'source') {
+				sourceAmountChanged()
+			} else {
+				targetAmountChanged()
+			}
+		}
+		return sourceAmount.value === 0n && targetAmount.value === 0n ? <></> : <button onClick={onClick}>↻</button>
+	}
+
 	return <div style={model.style}>
-		<div>Send {SourceToken} to <AddressPicker address={recipient} extraOptions={[model.wallet.address]}/> as {TargetToken} {sendResult.value.state === 'pending' ? <Spinner/> : <SubmitButton/>}</div>
+		<div><Refresh/> Send {SourceToken} to <AddressPicker address={recipient} extraOptions={[model.wallet.address]}/> as {TargetToken} <SubmitButton/></div>
 		<div style={{ color: 'red' }}>{sendResult.value.state === 'rejected' && sendResult.value.error.message}</div>
 	</div>
 }

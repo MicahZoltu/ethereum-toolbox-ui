@@ -41,7 +41,7 @@ export function RpcChooser(model: RpcChooserModel) {
 			case 'inactive': return <>
 					<label>
 						Ethereum JSON-RPC Server&thinsp;
-						<AutosizingInput type='url' placeholder='http://localhost:8545' value={internalValue} dataList={['http://localhost:8545', 'https://ethereum.zoltu.io', 'https://api.securerpc.com/v1']} style={{ border: '1px dotted', paddingInline: '5px' }}/>
+						<AutosizingInput type='url' placeholder='http://localhost:8545' value={internalValue} dataList={['http://localhost:8545', 'https://ethereum.zoltu.io', 'https://api.securerpc.com/v1']} style={{ paddingInline: '5px' }}/>
 					</label>
 					&thinsp;
 					<button onClick={testUrl}>Test</button>

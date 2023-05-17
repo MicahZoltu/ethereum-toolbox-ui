@@ -3,6 +3,12 @@
 *::after { 
 	box-sizing: border-box;
 }
+span {
+	border: 1px dotted;
+}
+span:focus-within {
+	border-color: red;
+}
 span,
 label {
 	display: inline-flex;
@@ -37,13 +43,13 @@ label::after {
 label input:invalid {
 	background-color: lightpink;
 }
-span:focus-within {
-	outline: auto;
-}
 input:focus {
 	outline: none;
 }
 input[type=password]:not(:placeholder-shown),
 label:after {
 	font-family: 'password-placeholder';
+}
+[list]::-webkit-calendar-picker-indicator {
+	display: none !important;
 }
