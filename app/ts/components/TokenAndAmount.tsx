@@ -2,6 +2,7 @@ import { Signal, useComputed } from '@preact/signals'
 import { TOKENS, tokensByName } from '../library/tokens.js'
 import { FixedPointInput } from './FixedPointInput.js'
 import { TokenSelector } from './TokenSelector.js'
+import { useOptionalSignal } from '../library/preact-utilities.js'
 
 export interface TokenAndAmountModel {
 	readonly token: Signal<TOKENS>
@@ -11,6 +12,7 @@ export interface TokenAndAmountModel {
 }
 export function TokenAndAmount(model: TokenAndAmountModel) {
 	const decimals = useComputed(() => tokensByName[model.token.value].decimals)
+	const amount = useOptionalSignal(model.amount, model.amount.value === 0n)
 
 	// token changed
 	function onTokenChange(newValue: TOKENS, oldValue: TOKENS) {
@@ -29,7 +31,7 @@ export function TokenAndAmount(model: TokenAndAmountModel) {
 	}
 
 	return <span>
-		<FixedPointInput autoSize required placeholder='1.23' value={model.amount} decimals={decimals} onChange={onAmountChanged}/>
+		<FixedPointInput autoSize required placeholder='1.23' value={amount} decimals={decimals} onChange={onAmountChanged}/>
 		&nbsp;
 		<TokenSelector selectedToken={model.token} onChange={onTokenChange}/>
 	</span>

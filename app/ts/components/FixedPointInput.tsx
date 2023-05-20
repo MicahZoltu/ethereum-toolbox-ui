@@ -1,14 +1,15 @@
-import { ReadonlySignal, Signal } from '@preact/signals'
+import { ReadonlySignal } from '@preact/signals'
 import { JSX } from 'preact/jsx-runtime'
 import { bigintToDecimalString, decimalStringToBigint } from '../library/utilities.js'
 import { AutosizingInput, ParsedAutosizingInputModel, UnparsedAutosizingInputModel } from './AutosizingInput.js'
 import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
+import { OptionalSignal } from '../library/preact-utilities.js'
 
 const sanitizationRegexp = /[^\d\.]/g
 const regexp = /^\d*\.?(?:\d+)?$/
 
 export interface FixedPointInput {
-	value: Signal<bigint>
+	value: OptionalSignal<bigint>
 	decimals: ReadonlySignal<bigint>
 	autoSize?: boolean
 	className?: string | JSX.SignalLike<string | undefined>
@@ -23,8 +24,8 @@ export function FixedPointInput(model: FixedPointInput) {
 		value: model.value,
 		pattern: regexp.source,
 		sanitize: (input: string) => input.replaceAll(sanitizationRegexp, ''),
-		tryParse: (input: string) => regexp.test(input) ? { ok: true, value: decimalStringToBigint(input, model.decimals.peek()) } as const : { ok: false } as const,
-		serialize: (input: bigint) => input === 0n ? '' : bigintToDecimalString(input, model.decimals.peek()),
+		tryParse: (input: string) => input === '' ? { ok: true, value: undefined } : regexp.test(input) ? { ok: true, value: decimalStringToBigint(input, model.decimals.value) } : { ok: false } as const,
+		serialize: (input: bigint | undefined) => input === undefined ? '' : bigintToDecimalString(input, model.decimals.value),
 		onChange: model.onChange,
 		...model.className ? {className: model.className} : {},
 		...model.style ? {style: model.style} : {},

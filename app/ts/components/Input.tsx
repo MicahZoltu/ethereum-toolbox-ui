@@ -1,5 +1,6 @@
 import { batch, Signal, useSignal, useSignalEffect } from "@preact/signals";
 import { JSX } from "preact/jsx-runtime";
+import { OptionalSignal } from "../library/preact-utilities.js";
 
 export interface BaseInputModel extends Omit<JSX.HTMLAttributes<HTMLInputElement>, 'value' | 'onInput' | 'onInput'> {
 	readonly rawValue?: Signal<string>
@@ -11,14 +12,14 @@ export interface UnparsedInputModel extends BaseInputModel {
 	readonly serialize?: never
 }
 export interface ParsedInputModel<T> extends BaseInputModel {
-	readonly value: Signal<T>
+	readonly value: OptionalSignal<T>
 	readonly sanitize: (input: string) => string
-	readonly tryParse: (input: string) => { ok: true, value: T } | { ok: false }
-	readonly serialize: (input: T) => string
+	readonly tryParse: (input: string) => { ok: true, value: T | undefined } | { ok: false }
+	readonly serialize: (input: T | undefined) => string
 }
 function ParsedInput<T>(model: ParsedInputModel<T>) {
 	const pendingOnChange = useSignal(false)
-	const internalValue = model.rawValue || useSignal(model.serialize(model.value.peek()))
+	const internalValue = model.rawValue || useSignal(model.serialize(model.value.deepPeek()))
 
 	// internalValue changed or signal/hook referenced by sanitize/tryParse changed
 	useSignalEffect(() => {
@@ -27,8 +28,8 @@ function ParsedInput<T>(model: ParsedInputModel<T>) {
 			internalValue.value = sanitized
 			const parsed = model.tryParse(sanitized)
 			if (!parsed.ok) return
-			if (parsed.value !== model.value.peek()) pendingOnChange.value = true
-			model.value.value = parsed.value
+			if (parsed.value !== model.value.deepPeek()) pendingOnChange.value = true
+			model.value.deepValue = parsed.value
 		})
 	})
 
@@ -36,8 +37,8 @@ function ParsedInput<T>(model: ParsedInputModel<T>) {
 	useSignalEffect(() => {
 		batch(() => {
 			const parsedInternal = model.tryParse(model.sanitize(internalValue.peek()))
-			if (parsedInternal.ok && parsedInternal.value === model.value.value) return
-			internalValue.value = model.serialize(model.value.value)
+			if (parsedInternal.ok && parsedInternal.value === model.value.deepValue) return
+			internalValue.value = model.serialize(model.value.deepValue)
 		})
 	})
 
@@ -54,7 +55,7 @@ export function Input<T>(model: UnparsedInputModel | ParsedInputModel<T>) {
 	if ('tryParse' in model && model.tryParse) {
 		return <ParsedInput {...model}/>
 	} else {
-		return <ParsedInput {...model} sanitize={model.sanitize || (x => x)} tryParse={value=>({ok: true, value})} serialize={x=>x}/>
+		return <ParsedInput {...model} value={new OptionalSignal(model.value)} sanitize={model.sanitize || (x => x)} tryParse={value=>({ok: true, value})} serialize={x=>x||''}/>
 	}
 }
 

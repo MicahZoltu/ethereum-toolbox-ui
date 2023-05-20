@@ -1,4 +1,4 @@
-import { Signal, useSignal, useSignalEffect } from "@preact/signals"
+import { ReadonlySignal, useSignal, useSignalEffect } from "@preact/signals"
 import { JSX } from "preact/jsx-runtime"
 import { encodeTransaction, getAddress, signTransaction } from '@zoltu/ethereum-transactions'
 import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
@@ -6,133 +6,149 @@ import { wordlist } from '@zoltu/bip39/wordlists/english.js'
 import { HDKey } from "@scure/bip32"
 import { bytesToBigint, addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
 import { EthereumClientJsonRpc, EthereumClientWindow, IEthereumClient, Wallet } from "../library/ethereum.js"
-import { useAsyncState } from "../library/preact-utilities.js"
+import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { AutosizingInput } from "./AutosizingInput.js"
 import { RpcChooser } from "./RpcChooser.js"
 import { Spinner } from "./Spinner.js"
 import { AddressPicker } from "./AddressPicker.js"
 import { Select } from "./Select.js"
+import { useState } from "preact/hooks"
 
 export interface WalletChooserModel {
-	readonly wallet: Signal<Wallet | undefined>
+	readonly wallet: OptionalSignal<Wallet>
 	readonly style?: JSX.CSSProperties
 }
 export function WalletChooser(model: WalletChooserModel) {
 	const walletType = useSignal<'readonly' | 'memory' | 'window'>('readonly')
-	const onWalletBuilt = (wallet: Wallet) => model.wallet.value = wallet
+	useSignalEffect(() => walletType.value && model.wallet.clear())
 	return <div>
 		<div>
 			<Select options={['readonly', 'memory', 'window']} selected={walletType}/>
 		</div>
 		<div>
-		{ walletType.value === 'readonly' ? <ReadonlyWalletBuilder onWalletBuilt={onWalletBuilt}/>
-			: walletType.value === 'memory' ? <MemoryWalletBuilder onWalletBuilt={onWalletBuilt}/>
-			: walletType.value === 'window' ? <WindowWalletBuilder onWalletBuilt={onWalletBuilt}/>
+		{ walletType.value === 'readonly' ? <ReadonlyWalletBuilder wallet={model.wallet}/>
+			: walletType.value === 'memory' ? <MemoryWalletBuilder wallet={model.wallet}/>
+			: walletType.value === 'window' ? <WindowWalletBuilder wallet={model.wallet}/>
 			: <></>
 		}
 		</div>
 	</div>
 }
 
-function ReadonlyWalletBuilder({ onWalletBuilt }: { onWalletBuilt: (wallet: Wallet) => void }) {
-	const ethereumClient = useSignal<EthereumClientJsonRpc | undefined>(undefined)
-	const address = useSignal<bigint | undefined>(undefined)
-	useSignalEffect(() => {
-		if (ethereumClient.value === undefined) return
-		if (address.value === undefined) return
-		onWalletBuilt({ readonly: true, ethereumClient: ethereumClient.value, address: address.value })
-	})
-	if (ethereumClient.value === undefined) {
-		return <RpcChooser ethereumClient={ethereumClient}/>
-	} else if (address.value === undefined) {
-		return <AddressPicker address={address}/>
+function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet> }) {
+	const maybeEthereumClient = useOptionalSignal<EthereumClientJsonRpc>(undefined)
+	const maybeAddress = useOptionalSignal<bigint>(undefined)
+	useSignalEffect(() => { model.wallet.deepValue = maybeEthereumClient.deepValue && maybeAddress.deepValue ? { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue } : undefined })
+	if (maybeEthereumClient.value === undefined) {
+		return <RpcChooser ethereumClient={maybeEthereumClient}/>
+	} else if (maybeAddress.value === undefined) {
+		return <AddressPicker address={maybeAddress}/>
 	} else {
 		return <div>
-			<label>{addressBigintToHex(address.value)}&thinsp;</label>
-			<button onClick={() => { ethereumClient.value = address.value = undefined }}>Change Wallet</button>
+			<label>{addressBigintToHex(maybeAddress.value.value)}&thinsp;</label>
+			<button onClick={() => { maybeEthereumClient.value = maybeAddress.value = undefined }}>Change Wallet</button>
 		</div>
 	}
 }
 
-function WindowWalletBuilder({ onWalletBuilt }: { onWalletBuilt: (wallet: Wallet) => void }) {
-	const ethereumClientSignal = useSignal(EthereumClientWindow.tryCreate())
-	const ethereumClient = ethereumClientSignal.value
+function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet> }) {
+	const ethereumClientSignal = useOptionalSignal(EthereumClientWindow.tryCreate())
+	const ethereumClient = ethereumClientSignal.deepValue
 	if (ethereumClient) {
-		const { value: accounts, waitFor: waitForAccounts } = useAsyncState<readonly bigint[]>()
-		const requestAccounts = () => {
-			const accountsPromise = ethereumClient.requestAccounts()
-			accountsPromise.then(x => {
-				if (x[0] === undefined) return
-				onWalletBuilt({
+		const { value: asyncAddress, waitFor: waitForAccount } = useAsyncState<bigint | undefined>()
+		useSignalEffect(() => {
+			if (asyncAddress.value.state !== 'resolved') {
+				model.wallet.clear()
+			} else if (asyncAddress.value.value === undefined) {
+				model.wallet.clear()
+			} else {
+				const address = asyncAddress.value.value
+				model.wallet.deepValue = {
 					readonly: false,
 					ethereumClient,
-					address: x[0],
-					sendTransaction: transaction => ethereumClient.sendTransaction({...transaction, gas: 500000n}),
-				})
-			})
-			waitForAccounts(() => accountsPromise)
-		}
+					address: address,
+					sendTransaction: async transaction => {
+						const nonce = await ethereumClient.getTransactionCount(address, 'latest')
+						const gas = await ethereumClient.estimateGas(transaction, 'latest')
+						const chainId = await ethereumClient.chainId()
+						return await ethereumClient.sendTransaction({
+							type: '1559',
+							chainId,
+							nonce,
+							maxFeePerGas: 100n * 10n**9n,
+							maxPriorityFeePerGas: 10n**8n,
+							gas,
+							...transaction,
+							accessList: [],
+						})
+					},
+				}
+			}
+		})
+		const requestAccounts = () => waitForAccount(async () => {
+			const accounts = await ethereumClient.requestAccounts()
+			return accounts[0]
+		})
 		useSignalEffect(requestAccounts)
-		function RefreshAccountsButton() {
-			return <button onClick={requestAccounts}>Refresh Accounts</button>
-		}
-		switch (accounts.value.state) {
+		const [RefreshAccountsButton] = useState(() => () => <button onClick={requestAccounts}>Refresh Accounts</button>)
+		switch (asyncAddress.value.state) {
 			case 'inactive': return <div>Unexpected state, please report bug to developer.</div>
 			case 'pending': return <div>Loading accounts... <Spinner/></div>
-			case 'resolved': return accounts.value.value[0] !== undefined ? <div>Address: <code>{addressBigintToHex(accounts.value.value[0])}</code><RefreshAccountsButton/></div> : <div>No accounts provided by browser wallet.<RefreshAccountsButton/></div>
-			case 'rejected': return <div>Error while retrieving accounts from browser wallet: ${accounts.value.error.message}</div>
+			case 'resolved': return asyncAddress.value.value !== undefined ? <div>Address: <code style={{ display: 'inline-block'}}>{addressBigintToHex(asyncAddress.value.value)}</code> <RefreshAccountsButton/></div> : <div>No accounts provided by browser wallet.<RefreshAccountsButton/></div>
+			case 'rejected': return <div>Error while retrieving accounts from browser wallet: ${asyncAddress.value.error.message}</div>
 		}
 	} else {
 		return <div>No browser wallet detected.</div>
 	}
 }
 
-function MemoryWalletBuilder({ onWalletBuilt }: { onWalletBuilt: (wallet: Wallet) => void }) {
-	const ethereumClientSignal = useSignal<IEthereumClient | undefined>(undefined)
-	const privateKeySignal = useSignal<bigint | undefined>(undefined)
+function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet> }) {
+	const ethereumClientSignal = useOptionalSignal<IEthereumClient>(undefined)
+	const privateKeySignal = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
-		const ethereumClient = ethereumClientSignal.value
-		const privateKey = privateKeySignal.value
-		if (ethereumClient === undefined) return
-		if (privateKey === undefined) return
-		
-		const address = getAddress(privateKey)
-		onWalletBuilt({ readonly: false, address, ethereumClient, sendTransaction: async transaction => {
-			const nonce = await ethereumClient.getTransactionCount(address, 'latest')
-			const gasLimit = await ethereumClient.estimateGas(transaction, 'latest')
-			const chainId = await ethereumClient.chainId()
-			const signedTransaction = await signTransaction({
-				type: '1559',
-				chainId,
-				nonce,
-				maxFeePerGas: 100n * 10n**9n,
-				maxPriorityFeePerGas: 10n**8n,
-				gasLimit,
-				...transaction,
-				accessList: [],
-			}, privateKey)
-			const encodedTransaction = encodeTransaction(signedTransaction)
-			const transactionHash = await ethereumClient.sendRawTransaction(encodedTransaction)
-			return {
-				transactionHash,
-				waitForReceipt: async () => await ethereumClient.getTransactionReceipt(transactionHash)
-			}
-		}})
+		const ethereumClient = ethereumClientSignal.deepValue
+		const privateKey = privateKeySignal.deepValue
+		if (ethereumClient === undefined) {
+			model.wallet.clear()
+		} else if (privateKey === undefined) {
+			model.wallet.clear()
+		} else {
+			const address = getAddress(privateKey)
+			model.wallet.deepValue = ({ readonly: false, address, ethereumClient, sendTransaction: async transaction => {
+				const nonce = await ethereumClient.getTransactionCount(address, 'latest')
+				const gasLimit = await ethereumClient.estimateGas(transaction, 'latest')
+				const chainId = await ethereumClient.chainId()
+				const signedTransaction = await signTransaction({
+					type: '1559',
+					chainId,
+					nonce,
+					maxFeePerGas: 100n * 10n**9n,
+					maxPriorityFeePerGas: 10n**8n,
+					gasLimit,
+					...transaction,
+					accessList: [],
+				}, privateKey)
+				const encodedTransaction = encodeTransaction(signedTransaction)
+				const transactionHash = await ethereumClient.sendRawTransaction(encodedTransaction)
+				return {
+					transactionHash,
+					waitForReceipt: async () => await ethereumClient.getTransactionReceipt(transactionHash)
+				}
+			}})
+		}
 	})
+	const [ChangeAccountButton_] = useState(() => () => <button onClick={() => { ethereumClientSignal.value = privateKeySignal.value = undefined }}>Change Wallet</button>)
 	if (ethereumClientSignal.value === undefined) {
 		return <RpcChooser ethereumClient={ethereumClientSignal}/>
 	} else if (privateKeySignal.value === undefined) {
 		return <KeySelector privateKey={privateKeySignal}/>
 	} else {
-		return <div>
-			<label>{addressBigintToHex(getAddress(privateKeySignal.value))}&thinsp;</label>
-			<button onClick={() => { ethereumClientSignal.value = privateKeySignal.value = undefined }}>Change Wallet</button>
-		</div>
+		return <div>Address: <code style={{ display: 'inline-block' }}>{addressBigintToHex(getAddress(privateKeySignal.value.value))}</code> <ChangeAccountButton_/></div>
 	}
 }
 
-function KeySelector({ privateKey }: { privateKey: Signal<bigint | undefined> }) {
-	const seed = useSignal<Uint8Array | undefined>(undefined)
+function KeySelector({ privateKey }: { privateKey: OptionalSignal<bigint> }) {
+	const seed = useOptionalSignal<Uint8Array>(undefined)
 	if (privateKey.value !== undefined) {
 		return <button onClick={() => privateKey.value = seed.value = undefined}>Change Address</button>
 	} else if (seed.value !== undefined) {
@@ -142,24 +158,22 @@ function KeySelector({ privateKey }: { privateKey: Signal<bigint | undefined> })
 	}
 }
 
-function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: Signal<Uint8Array | undefined>, privateKey: Signal<bigint | undefined> }) {
+function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: OptionalSignal<Uint8Array>, privateKey: OptionalSignal<bigint> }) {
 	const internalValue = useSignal('')
-	const { value, waitFor, reset } = useAsyncState<string>()
+	const { value, waitFor, reset } = useAsyncState<void>()
 	function onClick() {
 		waitFor(async () => {
-			if (/^0x[a-fA-F0-9]{64}$/.test(internalValue.peek())) {
-				privateKey.value = BigInt(internalValue.peek())
-			} else if (validateMnemonic(internalValue.peek(), wordlist)) {
-				seed.value = await mnemonicToSeed(internalValue.peek())
+			const internal = internalValue.peek()
+			if (/^0x[a-fA-F0-9]{64}$/.test(internal)) {
+				privateKey.deepValue = BigInt(internal)
+			} else if (validateMnemonic(internal, wordlist)) {
+				seed.deepValue = await mnemonicToSeed(internal)
 			} else {
-				throw new Error(`${internalValue.peek()} is neither a mnemonic nor a private key.`)
+				throw new Error(`${internal} is neither a mnemonic nor a private key.`)
 			}
-			return internalValue.peek()
 		})
 	}
-	function ChangeButton() {
-		return <button onClick={reset}>Change</button>
-	}
+	const [ChangeButton] = useState(() => () => <button onClick={reset}>Change</button>)
 	switch (value.value.state) {
 		case 'inactive': return <div>
 			<label>Mnemonic or Private Key&thinsp;
@@ -174,17 +188,17 @@ function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: Signal<Uint8Array | u
 	}
 }
 
-function DerivationPathPrompt({ seed, privateKey}: { seed: Uint8Array, privateKey: Signal<bigint | undefined> }) {
+function DerivationPathPrompt({ seed, privateKey}: { seed: ReadonlySignal<Uint8Array>, privateKey: OptionalSignal<bigint> }) {
 	const derivationPath = useSignal(`m/44'/60'/0'/0/0`)
 	function onClick() {
-		const hdKey = HDKey.fromMasterSeed(seed)
+		const hdKey = HDKey.fromMasterSeed(seed.value)
 		const derivedHdKey = hdKey.derive(derivationPath.peek())
 		const maybePrivateKey = derivedHdKey.privateKey
 		if (maybePrivateKey === null) {
 			// TODO: figure out if this is actually possible
 			throw new Error(`Unexected Error: Private Key missing from HDKey.`)
 		}
-		privateKey.value = bytesToBigint(maybePrivateKey)
+		privateKey.deepValue = bytesToBigint(maybePrivateKey)
 	}
 	return <div>
 		<label>

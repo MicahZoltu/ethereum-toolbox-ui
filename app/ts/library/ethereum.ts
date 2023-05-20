@@ -84,7 +84,7 @@ export class EthereumClientWindow extends EthereumClient {
 	
 	public static tryCreate() {
 		if (!('ethereum' in window) || typeof window.ethereum !== 'object' || window.ethereum === null || !('request' in window.ethereum) || typeof window.ethereum.request !== 'function') {
-			return false as const
+			return undefined
 		}
 		return new EthereumClientWindow()
 	}

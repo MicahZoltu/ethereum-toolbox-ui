@@ -1,17 +1,18 @@
-import { Signal, useSignal } from "@preact/signals";
+import { useSignal } from "@preact/signals";
 import { JSX } from "preact/jsx-runtime";
 import { EthereumClientJsonRpc, IEthereumClient } from "../library/ethereum.js";
-import { useAsyncState } from "../library/preact-utilities.js";
+import { OptionalSignal, useAsyncState } from "../library/preact-utilities.js";
 import { AutosizingInput } from "./AutosizingInput.js";
 import { Spinner } from "./Spinner.js";
+import { useState } from "preact/hooks";
 
 export interface RpcChooserModel {
-	readonly ethereumClient: Signal<IEthereumClient | undefined>
+	readonly ethereumClient: OptionalSignal<IEthereumClient>
 	readonly style?: JSX.CSSProperties
 }
 export function RpcChooser(model: RpcChooserModel) {
 	const { value: url, waitFor: urlWaitFor, reset: resetValidity } = useAsyncState<string>()
-	const existingProvider = model.ethereumClient.peek()
+	const existingProvider = model.ethereumClient.deepPeek()
 
 	// try to use the existing provider's endpoint (if it exists)
 	if (existingProvider && 'endpoint' in existingProvider && typeof existingProvider.endpoint === 'string') {
@@ -32,11 +33,11 @@ export function RpcChooser(model: RpcChooserModel) {
 				|| typeof json.result !== 'string'
 				|| !json.result.startsWith('0x')
 			) throw new Error(`Unexpected result from server: ${await response.text()}`)
-			model.ethereumClient.value = await EthereumClientJsonRpc.create(url)
+			model.ethereumClient.deepValue = await EthereumClientJsonRpc.create(url)
 			return url
 		})
 	}
-	function InnerFragment() {
+	const [InnerFragment] = useState(() => () => {
 		switch (url.value.state) {
 			case 'inactive': return <>
 					<label>
@@ -50,6 +51,6 @@ export function RpcChooser(model: RpcChooserModel) {
 			case 'rejected': return <>{internalValue.value || 'http://localhost:8545'} is not a valid Ethereum JSON-RPC server. <span style={{ color: 'red' }}>{url.value.error.message}</span><button onClick={resetValidity}>Change</button></>
 			case 'resolved': return <>{url.value.value} <button onClick={resetValidity}>Change</button></>
 		}
-	}
+	})
 	return <div style={{ height: '22px', ...model.style }}><InnerFragment/></div>
 }

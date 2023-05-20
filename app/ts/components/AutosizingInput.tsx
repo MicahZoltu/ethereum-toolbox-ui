@@ -12,7 +12,7 @@ export interface ParsedAutosizingInputModel<T> extends BaseAutosizingInputModel,
 
 export function AutosizingInput<T>(model: UnparsedAutosizingInputModel | ParsedAutosizingInputModel<T>) {
 	// TODO: figure out why this signal is getting reset to default value when the Shadow component is rerendered
-	const internalValue = model.rawValue || useSignal(model.serialize ? model.serialize(model.value.peek()) : model.value.peek())
+	const internalValue = model.rawValue || useSignal(model.serialize ? model.serialize(model.value.deepPeek()) : model.value.peek())
 	const spaceFiller = useComputed(() => model.type === 'password' ? ''.padEnd(internalValue.value.length, '●') : internalValue.value)
 	const inputModel = {
 		rawValue: internalValue,

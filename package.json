@@ -19,7 +19,7 @@
 		"@zoltu/ethereum-transactions": "1.0.0",
 		"funtypes": "5.0.3",
 		"micro-web3": "0.1.2",
-		"preact": "10.13.2"
+		"preact": "10.14.1"
 	},
 	"scripts": {
 		"setup": "npm ci --ignore-scripts && tsc && npm run vendor",
