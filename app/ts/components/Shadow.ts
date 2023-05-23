@@ -10,6 +10,6 @@ export function Shadow({ children }: { children: ComponentChildren }) {
 			shadowRoot = host.shadowRoot || host.attachShadow({mode: 'open'})
 			const vnode = Array.isArray(children) ? Fragment({ children }) : children
 			render(vnode, shadowRoot)
-		}
+		},
 	})
 }

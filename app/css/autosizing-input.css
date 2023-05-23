@@ -4,10 +4,11 @@
 	box-sizing: border-box;
 }
 span {
-	border: 1px dotted;
+	/* we want our input box to be able to shrink, even if it has no spaces */
+	line-break: anywhere;
 }
-span:focus-within {
-	border-color: red;
+input:focus-within {
+	outline-color: red;
 }
 span,
 label {
@@ -21,9 +22,14 @@ label {
 	min-width: 100%;
 	font: inherit;
 }
+label input:focus,
+label input {
+	outline: 1px dotted;
+	padding-inline: 3px;
+}
 span:after,
 label::after,
-label input {
+input {
 	width: 100%;
 	min-width: 0;
 	font: inherit;
@@ -39,6 +45,7 @@ label::after {
 	visibility: hidden;
 	white-space: pre-wrap;
 	height: 0;
+	padding-inline: 3px;
 }
 label input:invalid {
 	background-color: lightpink;

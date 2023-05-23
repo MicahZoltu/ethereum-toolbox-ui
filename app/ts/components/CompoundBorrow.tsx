@@ -8,6 +8,8 @@ import { bigintToDecimalString } from "../library/utilities.js"
 import { FixedPointInput } from "./FixedPointInput.js"
 import { Spinner } from "./Spinner.js"
 import { useState } from "preact/hooks"
+import { Refresh } from "./Refresh.js"
+import { Spacer } from "./Spacer.js"
 
 const COMPTROLLER = 0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3Bn
 const COMPTROLLER_ABI = [
@@ -22,6 +24,7 @@ const ORACLE_ABI = [{"inputs":[{"internalType":"address","name":"cToken","type":
 export type CompoundBorrowModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly style?: JSX.CSSProperties
+	readonly class?: JSX.HTMLAttributes['class']
 }
 export function CompoundBorrow(model: CompoundBorrowModel) {
 	const borrowLimit = useOptionalSignal<bigint>(undefined)
@@ -42,8 +45,8 @@ export function CompoundBorrow(model: CompoundBorrowModel) {
 	const [BorrowLimitError_] = useState(() => () => <>{borrowLimitError.value && <div style={{ color: 'red' }}>{borrowLimitError.value}</div>}</>)
 	const [BorrowError_] = useState(() => () => <>{borrowError.value && <div style={{ color: 'red' }}>{borrowError.value}</div>}</>)
 
-	return <div style={model.style}>
-		<div>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH) <BorrowButton_/></div>
+	return <div style={model.style} class={model.class}>
+		<div>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH)<Spacer/><BorrowButton_/></div>
 		<BorrowLimitError_/>
 		<BorrowError_/>
 	</div>
@@ -71,12 +74,12 @@ function BorrowLimit(model: BorrowLimitModel) {
 	useSignalEffect(() => { model.borrowLimit.value === undefined && refresh() })
 	useSignalEffect(() => { borrowLimit.value.state === 'resolved' && (model.borrowLimit.deepValue = borrowLimit.value.value) })
 	useSignalEffect(() => batch(() => { model.error.deepValue = borrowLimit.value.state === 'rejected' ? borrowLimit.value.error.message : undefined }))
-	const [Refresh] = useState(() => () => <button onClick={refresh}>↻</button>)
+	const [Refresh_] = useState(() => () => <Refresh onClick={refresh}/>)
 	switch (borrowLimit.value.state) {
-		case 'inactive': return <Refresh/>
+		case 'inactive': return <Refresh_/>
 		case 'pending': return <Spinner/>
-		case 'rejected': return <Refresh/>
-		case 'resolved': return <>{bigintToDecimalString(borrowLimit.value.value, 18n)} <Refresh/></>
+		case 'rejected': return <Refresh_/>
+		case 'resolved': return <>{bigintToDecimalString(borrowLimit.value.value, 18n)} <Refresh_/></>
 	}
 }
 
@@ -95,15 +98,14 @@ function BorrowButton(model: BorrowButtonModel) {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
 			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			await (await model.wallet.value.ethereumClient.sendTransaction({
+			await (await model.wallet.value.sendTransaction({
 				to: CETH,
 				value: 0n,
 				data: contract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrow.encodeInput(model.borrowAmount.value),
-				gas: 300000n,
 			})).waitForReceipt()
 		})
 	}
 	return sendResult.value.state === 'pending'
 		? <Spinner/>
-		: <button onClick={submit}>Submit</button>
+		: <button onClick={submit} style={{  marginLeft: 'auto'}}>Submit</button>
 }

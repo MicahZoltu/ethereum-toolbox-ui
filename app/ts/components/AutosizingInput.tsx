@@ -3,7 +3,7 @@ import { Signal, useComputed, useSignal } from '@preact/signals'
 import { Shadow } from './Shadow.js'
 import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
 
-export interface BaseAutosizingInputModel extends Pick<JSX.HTMLAttributes<HTMLSpanElement>, 'className' | 'style'>, Pick<UnparsedInputModel, 'key' | 'type' | 'pattern' | 'placeholder' | 'required' | 'onChange' | 'autocomplete'> {
+export interface BaseAutosizingInputModel extends Pick<JSX.HTMLAttributes<HTMLSpanElement>, 'class' | 'style'>, Pick<UnparsedInputModel, 'key' | 'type' | 'pattern' | 'placeholder' | 'required' | 'onChange' | 'autocomplete'> {
 	readonly dataList?: string[]
 	readonly rawValue?: Signal<string>
 }
@@ -36,7 +36,7 @@ export function AutosizingInput<T>(model: UnparsedAutosizingInputModel | ParsedA
 	} satisfies UnparsedInputModel | ParsedInputModel<T>
 	return <Shadow>
 		<link rel='stylesheet' href='css/autosizing-input.css'/>
-		<span className={model.className} style={model.style} data-value={model.placeholder}>
+		<span class={model.class} style={model.style} data-value={model.placeholder}>
 			<label data-value={spaceFiller}>
 				<Input {...inputModel}/>
 				<datalist id='datalist'>

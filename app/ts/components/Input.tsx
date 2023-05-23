@@ -49,7 +49,10 @@ function ParsedInput<T>(model: ParsedInputModel<T>) {
 		model.onChange(event)
 	}
 
-	return <input {...model} value={internalValue} onInput={event => internalValue.value = event.currentTarget.value} onChange={onChange}/>
+	// we want to pass through all model values *except* the rawValue, which may contain a password
+	const inputModel = { ...model }
+	delete inputModel.rawValue
+	return <input {...inputModel} value={internalValue} onInput={event => internalValue.value = event.currentTarget.value} onChange={onChange}/>
 }
 export function Input<T>(model: UnparsedInputModel | ParsedInputModel<T>) {
 	if ('tryParse' in model && model.tryParse) {

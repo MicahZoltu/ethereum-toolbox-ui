@@ -1,6 +1,7 @@
 svg.spinner {
 	animation: 2s linear infinite svg-animation;
 	max-width: 100px;
+	height: 1em;
 }
 @keyframes svg-animation {
 	0% { transform: rotateZ(0deg); }

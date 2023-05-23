@@ -1,7 +1,7 @@
 import { TransactionUnsigned } from '@zoltu/ethereum-transactions'
 import { HexAddress } from './typescript.js'
-import { EthCallParameters, EthereumQuantity, JsonRpcRequest, EthereumRequest, JsonRpcResponse, EthCallResult, EthEstimateGasParameters, EthEstimateGasResult, EthereumData, serialize, EthereumUnsignedTransaction, EthSendTransactionResult, EthSendTransactionParameters, EthereumBytes32, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthTransactionReceiptResult, EthGetTransactionReceiptParameters, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthChainIdParameters, EthChainIdResult, EthRequestAccountsResult } from './wire-types.js'
 import { jsonStringify } from './utilities.js'
+import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumBytes32, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -25,6 +25,7 @@ export type IProvider = {
 }
 export type IEthereumClient = Pick<EthereumClient, keyof EthereumClient>
 export abstract class EthereumClient {
+	public address?: bigint
 	public abstract readonly request: (request: EthereumRequest) => Promise<unknown>
 
 	public readonly chainId = async (...params: EthChainIdParameters) => {
@@ -32,9 +33,14 @@ export abstract class EthereumClient {
 		return EthChainIdResult.parse(result)
 	}
 
-	public readonly call = async (...params: EthCallParameters) => {
-		const result =  await this.request({ method: 'eth_call', params })
+	public readonly call = async (...[transaction, blockTag]: EthCallParameters) => {
+		const result =  await this.request({ method: 'eth_call', params: [{...this.address ? {from: this.address} : {}, ...transaction}, blockTag] })
 		return EthCallResult.parse(result)
+	}
+
+	public readonly getBalance = async(...params: EthGetBalanceParameters) => {
+		const result = await this.request({ method: 'eth_getBalance', params })
+		return EthGetBalanceResult.parse(result)
 	}
 
 	public readonly getTransactionCount = async (...params: EthGetTransactionCountParameters) => {
@@ -42,8 +48,8 @@ export abstract class EthereumClient {
 		return EthGetTransactionCountResult.parse(result)
 	}
 
-	public readonly estimateGas = async (...params: EthEstimateGasParameters) => {
-		const result = await this.request({ method: 'eth_estimateGas', params })
+	public readonly estimateGas = async (...[transaction, blockTag]: EthEstimateGasParameters) => {
+		const result = await this.request({ method: 'eth_estimateGas', params: [{...this.address ? {from: this.address} : {}, ...transaction}, blockTag] })
 		return EthEstimateGasResult.parse(result)
 	}
 
@@ -59,8 +65,8 @@ export abstract class EthereumClient {
 	}
 
 	// Note: not all providers will have this capability
-	public readonly sendTransaction = async (...params: EthSendTransactionParameters) => {
-		const result = await this.request({ method: 'eth_sendTransaction', params })
+	public readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters) => {
+		const result = await this.request({ method: 'eth_sendTransaction', params: [{...this.address ? {from: this.address} : {}, ...transaction}] })
 		const transactionHash = EthSendTransactionResult.parse(result)
 		return { transactionHash, waitForReceipt: () => this.getTransactionReceipt(transactionHash) }
 	}
@@ -83,10 +89,17 @@ export class EthereumClientWindow extends EthereumClient {
 	}
 	
 	public static tryCreate() {
-		if (!('ethereum' in window) || typeof window.ethereum !== 'object' || window.ethereum === null || !('request' in window.ethereum) || typeof window.ethereum.request !== 'function') {
-			return undefined
-		}
+		if (!this.hasWindowEthereum(window)) return undefined
 		return new EthereumClientWindow()
+	}
+
+	public static hasWindowEthereum(maybeEthereumWindow: Window): maybeEthereumWindow is Window & { ethereum: { request: (x: { method: string, params: unknown[] }) => Promise<unknown> } } {
+		if (!('ethereum' in maybeEthereumWindow)) return false
+		if (typeof maybeEthereumWindow.ethereum !== 'object') return false
+		if (maybeEthereumWindow.ethereum === null) return false
+		if (!('request' in maybeEthereumWindow.ethereum)) return false
+		if (typeof maybeEthereumWindow.ethereum.request !== 'function') return false
+		return true
 	}
 }
 

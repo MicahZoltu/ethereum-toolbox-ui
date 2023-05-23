@@ -19,6 +19,7 @@ const CETH_ABI = [{"constant":false,"inputs":[{"name":"account","type":"address"
 export type CompoundRepayModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly style?: JSX.CSSProperties
+	readonly class?: JSX.HTMLAttributes['class']
 }
 export function CompoundRepay(model: CompoundRepayModel) {
 	const maybeBorrower = useOptionalSignal<bigint>(undefined)
@@ -51,8 +52,8 @@ export function CompoundRepay(model: CompoundRepayModel) {
 	})
 	const [DebtQueryError_] = useState(() => () => <>{debtError.deepValue && <div style={{ color: 'red' }}>{debtError.deepValue}</div>}</>)
 	const [SubmitError_] = useState(() => () => <>{submitError.deepValue && <div style={{ color: 'red' }}>{submitError.deepValue}</div>}</>)
-	return <div style={model.style}>
-		<div>Reopay debt of <BorrowerSelector_/> <Suffix_/></div>
+	return <div style={model.style} class={model.class}>
+		<div>Repay debt of <BorrowerSelector_/> <Suffix_/></div>
 		<DebtQueryError_/>
 		<SubmitError_/>
 	</div>
@@ -75,11 +76,12 @@ function CompoundDebt(model: CompoundDebt) {
 	useSignalEffect(() => { model.debtInAttoeth.value === undefined && refresh() })
 	useSignalEffect(() => { model.debtInAttoeth.deepValue = debtAmount.value.state === 'resolved' ? debtAmount.value.value : undefined })
 	useSignalEffect(() => { model.error.deepValue = debtAmount.value.state === 'rejected' ? debtAmount.value.error.message : undefined })
+	const [Refresh_] = useState(() => () => <Refresh onClick={refresh}/>)
 	switch (debtAmount.value.state) {
-		case 'inactive': return <Refresh onClick={refresh}/>
+		case 'inactive': return <Refresh_/>
 		case 'pending': return <Spinner/>
-		case 'rejected': return <Refresh onClick={refresh}/>
-		case 'resolved': return <span>{bigintToDecimalString(debtAmount.value.value, 18n)} <Refresh onClick={refresh}/></span>
+		case 'rejected': return <Refresh_/>
+		case 'resolved': return <span>{bigintToDecimalString(debtAmount.value.value, 18n)} <Refresh_/></span>
 	}
 }
 
@@ -99,11 +101,10 @@ function PayDebtButton(model: PayDebtButtonModel) {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
 			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			await (await model.wallet.value.ethereumClient.sendTransaction({
+			await (await model.wallet.value.sendTransaction({
 				to: CETH_REPAY_HELPER,
 				value: model.amountToRepay.value,
 				data: contract(CETH_REPAY_HELPER_ABI, microWeb3Provider, addressBigintToHex(CETH_REPAY_HELPER)).repayBehalfExplicit.encodeInput({ borrower: addressBigintToHex(model.debtorAddress.value), cEther_: addressBigintToHex(CETH) }),
-				gas: 500000n,
 			})).waitForReceipt()
 		})
 	}

@@ -3,9 +3,45 @@
 *::after { 
 	box-sizing: border-box;
 }
+div {
+	display: flex;
+}
+span,
+label {
+	display: inline-flex;
+}
+div, label {
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25em;
+}
 
 main {
+	display: grid;
+	width: fit-content;
 	margin: 10px;
+}
+code {
+	/* so double/tripple clicking will select the contents without extra spaces */
+	display: inline-block;
+}
+
+.spacer {
+	flex-grow: 1;
+}
+.widget {
+	flex-direction: column;
+	align-content: flex-start;
+	align-items: flex-start;
+	justify-content: center;
+	margin: 5px;
+	padding: 5px;
+	border: 1px solid black;
+	/* tall enough to fit a button */
+	min-height: calc(1em + 17px);
+}
+.widget > div {
+	width: 100%;
 }
 
 /* A custom font that renders both ● and • the same so password fields in different browsers render consistently despite using different placeholder glyphs. */
