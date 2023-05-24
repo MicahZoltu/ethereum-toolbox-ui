@@ -1,8 +1,9 @@
-import { Signal, useSignal } from '@preact/signals'
+import { ReadonlySignal, Signal, useSignal } from '@preact/signals'
 import { JSX } from 'preact/jsx-runtime'
+import { isArray } from '../library/typescript.js'
 
 export interface SelectModel<T extends string> {
-	readonly options: readonly T[]
+	readonly options: ReadonlySignal<T[]> | T[]
 	readonly selected: Signal<T>
 	readonly onChange?: (newValue: T, oldValue: T) => void
 }
@@ -10,8 +11,9 @@ export interface SelectModel<T extends string> {
 export function Select<T extends string>(model: SelectModel<T>) {
 	const previouslySelected = useSignal(model.selected.value)
 	function onInput(event: JSX.TargetedEvent<HTMLSelectElement, Event>) {
+		const options = isArray(model.options) ? model.options : model.options.value
 		const value = event.currentTarget.value
-		if (!model.options.includes(value as T)) return
+		if (!options.includes(value as T)) return
 		model.selected.value = value as T
 	}
 	function onChange() {
@@ -23,7 +25,7 @@ export function Select<T extends string>(model: SelectModel<T>) {
 	}
 	return <select value={model.selected} onInput={onInput} onChange={onChange}>
 		{
-			model.options.map(x => <option key={x} value={x}>{x}</option>)
+			(isArray(model.options) ? model.options : model.options.value).map(x => <option key={x} value={x}>{x}</option>)
 		}
 	</select>
 }

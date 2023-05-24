@@ -1,20 +1,20 @@
 import { Signal, useComputed } from '@preact/signals'
-import { TOKENS, tokensBySymbol } from '../library/tokens.js'
+import { AssetDetails } from '../library/tokens.js'
 import { FixedPointInput } from './FixedPointInput.js'
 import { TokenSelector } from './TokenSelector.js'
 import { OptionalSignal } from '../library/preact-utilities.js'
 
 export interface TokenAndAmountModel {
-	readonly token: Signal<TOKENS>
+	readonly assetDetails: Signal<AssetDetails>
 	readonly amount: OptionalSignal<bigint>
 	readonly onAmountChange?: () => void
-	readonly onTokenChange?: (newValue: TOKENS, oldValue: TOKENS) => void
+	readonly onTokenChange?: (newValue: AssetDetails, oldValue?: AssetDetails) => void
 }
 export function TokenAndAmount(model: TokenAndAmountModel) {
-	const decimals = useComputed(() => tokensBySymbol[model.token.value].decimals)
+	const decimals = useComputed(() => model.assetDetails.value.decimals)
 
 	// token changed
-	function onTokenChange(newValue: TOKENS, oldValue: TOKENS) {
+	function onTokenChange(newValue: AssetDetails, oldValue?: AssetDetails) {
 		const amount = model.amount.deepPeek()
 		if (amount === undefined) return
 		model.onTokenChange && model.onTokenChange(newValue, oldValue)
@@ -27,6 +27,6 @@ export function TokenAndAmount(model: TokenAndAmountModel) {
 	return <span>
 		<FixedPointInput autoSize required placeholder='1.23' value={model.amount} decimals={decimals} onChange={onAmountChanged}/>
 		&nbsp;
-		<TokenSelector selectedToken={model.token} onChange={onTokenChange}/>
+		<TokenSelector selectedToken={model.assetDetails} onChange={onTokenChange}/>
 	</span>
 }

@@ -2,6 +2,8 @@ import { TransactionUnsigned } from '@zoltu/ethereum-transactions'
 import { HexAddress } from './typescript.js'
 import { jsonStringify } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumBytes32, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
+import { contract } from 'micro-web3'
+import { addressBigintToHex, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -122,6 +124,90 @@ export class EthereumClientJsonRpc extends EthereumClient {
 	public override readonly request = async (request: EthereumRequest) => {
 		return jsonRpcRequest(this.endpoint, { jsonrpc: '2.0', id: ++this.nextRequestId, ...request } as const, this.extraHeaders)
 	}
+
+	public override readonly sendTransaction = async () => {
+		throw new Error(`Wallet does not support sending transactions.`)
+	}
+}
+
+export class EthereumClientContract extends EthereumClient {
+	private readonly walletContract = contract([
+		{
+			"name": "execute",
+			"type": "function",
+			"stateMutability": "payable",
+			"inputs": [
+				{"internalType": "address payable","name": "_to","type": "address"},
+				{"internalType": "uint256","name": "_value","type": "uint256"},
+				{"internalType": "bytes","name": "_data","type": "bytes"}
+			],
+			"outputs": [
+				{"internalType": "bytes","name": "","type": "bytes"}
+			],
+		},
+		{
+			"name": "deploy",
+			"type": "function",
+			"stateMutability": "payable",
+			"inputs": [
+				{"internalType": "uint256","name": "_value","type": "uint256"},
+				{"internalType": "bytes","name": "_data","type": "bytes"},
+				{"internalType": "uint256","name": "_salt","type": "uint256"}
+			],
+			"outputs": [
+				{"internalType": "address","name": "","type": "address"}
+			],
+		},
+	] as const, toMicroWeb3(this))
+
+	public constructor(
+		private readonly underlyingClient: IEthereumClient,
+		private readonly underlyingAddress: bigint,
+		public override readonly address: bigint,
+	) {
+		super()
+		this.underlyingAddress
+	}
+
+	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
+
+	public override readonly call = async (...[transaction, blockTag]: EthCallParameters): ReturnType<EthereumClient['call']> => {
+		const result = await this.underlyingClient.call({
+			...transaction,
+			to: this.address,
+			value: 0n,
+			data: (transaction.to === null)
+				? this.walletContract.deploy.encodeInput({ _value: transaction.value || 0n, _data: transaction.data || new Uint8Array(0), _salt: 0n })
+				: this.walletContract.execute.encodeInput({ _to: addressBigintToHex(transaction.to), _value: transaction.value || 0n, _data: transaction.data || new Uint8Array(0) })
+		}, blockTag)
+		return this.walletContract.execute.decodeOutput(result)
+	}
+
+	public override readonly estimateGas = async (...[transaction, blockTag]: EthEstimateGasParameters): ReturnType<EthereumClient['estimateGas']> => {
+		return await this.underlyingClient.estimateGas({
+			...transaction,
+			to: this.address,
+			value: 0n,
+			data: (transaction.to === null)
+				? this.walletContract.deploy.encodeInput({ _value: transaction.value || 0n, _data: transaction.data || new Uint8Array(0), _salt: 0n })
+				: this.walletContract.execute.encodeInput({ _to: addressBigintToHex(transaction.to), _value: transaction.value || 0n, _data: transaction.data || new Uint8Array(0) })
+		}, blockTag)
+	}
+
+	public override readonly sendTransaction = async (...[innerTransaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
+		const outerTransaction = {
+			...innerTransaction,
+			to: this.address,
+			value: 0n,
+			data: (innerTransaction.to === null)
+				? this.walletContract.deploy.encodeInput({ _value: innerTransaction.value || 0n, _data: innerTransaction.data || new Uint8Array(0), _salt: 0n })
+				: this.walletContract.execute.encodeInput({ _to: addressBigintToHex(innerTransaction.to), _value: innerTransaction.value || 0n, _data: innerTransaction.data || new Uint8Array(0) })
+		}
+		return await this.underlyingClient.sendTransaction({
+			...outerTransaction,
+			gas: innerTransaction.gas ?? await this.underlyingClient.estimateGas(outerTransaction, 'latest')
+		})
+	}
 }
 
 export function toMicroWeb3(ethereumClient: IEthereumClient) {
@@ -147,7 +233,11 @@ async function jsonRpcRequest(endpoint: string, request: JsonRpcRequest, extraHe
 	const rawJsonRpcResponse = await response.json() as unknown
 	const jsonRpcResponse = JsonRpcResponse.parse(rawJsonRpcResponse)
 	if ('error' in jsonRpcResponse) {
-		throw new Error(`JSON-RPC Response Error:\nRequest:\n${JSON.stringify(request)}\nResponse:\n${jsonRpcResponse.error.code}: ${jsonRpcResponse.error.message}\n${jsonStringify(jsonRpcResponse.error.data)}`)
+		if (typeof jsonRpcResponse.error.data === 'string' && jsonRpcResponse.error.data.startsWith('Reverted 0x')) {
+			throw new Error(`Contract reverted: ${new TextDecoder().decode(hexToBytes(jsonRpcResponse.error.data.slice('Reverted '.length)))}`)
+		} else {
+			throw new Error(`JSON-RPC Response Error:\nRequest:\n${jsonStringify(request)}\nResponse:\n${jsonRpcResponse.error.code}: ${jsonRpcResponse.error.message}\n${jsonStringify(jsonRpcResponse.error.data)}`)
+		}
 	}
 	return jsonRpcResponse.result
 }

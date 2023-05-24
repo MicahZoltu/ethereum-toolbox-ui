@@ -5,7 +5,7 @@ import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
 import { wordlist } from '@zoltu/bip39/wordlists/english.js'
 import { HDKey } from "@scure/bip32"
 import { bytesToBigint, addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
-import { EthereumClientJsonRpc, EthereumClientWindow, IEthereumClient, Wallet } from "../library/ethereum.js"
+import { EthereumClientContract, EthereumClientJsonRpc, EthereumClientWindow, IEthereumClient, Wallet } from "../library/ethereum.js"
 import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { AutosizingInput } from "./AutosizingInput.js"
 import { RpcChooser } from "./RpcChooser.js"
@@ -21,7 +21,7 @@ export interface WalletChooserModel {
 	readonly class?: JSX.HTMLAttributes['class']
 }
 export function WalletChooser(model: WalletChooserModel) {
-	const walletType = useSignal<'readonly' | 'memory' | 'window'>('readonly')
+	const walletType = useSignal<'readonly' | 'memory' | 'window' | 'contract'>('readonly')
 	const error = useOptionalSignal<string>(undefined)
 	useSignalEffect(() => walletType.value && model.wallet.clear())
 	const [WalletBuilder_] = useState(() => () => {
@@ -29,11 +29,12 @@ export function WalletChooser(model: WalletChooserModel) {
 			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} error={error}/>
 			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} error={error}/>
 			case 'window': return <WindowWalletBuilder wallet={model.wallet} error={error}/>
+			case 'contract': return <ContractWalletBuilder wallet={model.wallet} error={error}/>
 		}
 	})
 	const [Error_] = useState(() => () => error.deepValue ? <div style={{ color: 'red' }}>{error}</div> : <></>)
 	return <div style={model.style} class={model.class}>
-		<div><Select options={['readonly', 'memory', 'window']} selected={walletType}/><WalletBuilder_/></div>
+		<div><Select options={['readonly', 'memory', 'window', 'contract']} selected={walletType} /><WalletBuilder_/></div>
 		<Error_/>
 	</div>
 }
@@ -41,16 +42,55 @@ export function WalletChooser(model: WalletChooserModel) {
 function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: OptionalSignal<string> }) {
 	const maybeEthereumClient = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
-	useSignalEffect(() => { model.wallet.deepValue = maybeEthereumClient.deepValue && maybeAddress.deepValue ? { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue } : undefined })
+	useSignalEffect(() => {
+		if (!maybeEthereumClient.deepValue || !maybeAddress.deepValue) {
+			model.wallet.deepValue = undefined
+		} else {
+			maybeEthereumClient.deepValue.address = maybeAddress.deepValue
+			model.wallet.deepValue = { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue }
+		}
+	})
 	if (maybeEthereumClient.deepValue === undefined) {
 		return <RpcChooser ethereumClient={maybeEthereumClient} error={model.error}/>
 	} else if (maybeAddress.deepValue === undefined) {
-		return <AddressPicker address={maybeAddress}/>
+		return <AddressPicker required address={maybeAddress} extraOptions={[]}/>
 	} else {
 		const [Address_] = useState(() => () => <code>{addressBigintToHex(maybeAddress.deepValue!)}</code>)
 		const [ChangeButton_] = useState(() => () => <button onClick={() => { maybeEthereumClient.value = maybeAddress.value = undefined }}>Change</button>)
 		return <div style={{ flexGrow: 1 }}>Address:<Address_/><Spacer/><ChangeButton_/></div>
 	}
+}
+
+function ContractWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: OptionalSignal<string> }) {
+	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
+	const address = useOptionalSignal<bigint>(undefined)
+	useSignalEffect(() => {
+		if (underlyingWallet.deepValue === undefined || address.deepValue === undefined) {
+			model.wallet.deepValue = undefined
+			return
+		}
+		const ethereumClient = new EthereumClientContract(underlyingWallet.deepValue.ethereumClient, underlyingWallet.deepValue.address, address.deepValue)
+		model.wallet.deepValue = {
+			ethereumClient,
+			address: address.deepValue,
+			...underlyingWallet.deepValue.readonly ? {
+				readonly: true
+			} : {
+				readonly: false,
+				sendTransaction: ethereumClient.sendTransaction
+			}
+		}
+	})
+	const [ChangeButton_] = useState(() => () => <button onClick={() => { address.deepValue = undefined }}>Change</button>)
+	const [ContractAddress_] = useState(() => () => {
+		return (address.deepValue === undefined)
+			? <AddressPicker required address={address} extraOptions={[]}/>
+			: <>Contract:<code>{addressBigintToHex(address.deepValue)}</code><Spacer/><ChangeButton_/></>
+	})
+	return <div style={{ flexGrow: 1 }}>
+		<ContractAddress_/>
+		<WalletChooser wallet={underlyingWallet}/>
+	</div>
 }
 
 function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: OptionalSignal<string> }) {
@@ -71,21 +111,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: Opt
 					readonly: false,
 					ethereumClient,
 					address: address,
-					sendTransaction: async transaction => {
-						const nonce = await ethereumClient.getTransactionCount(address, 'latest')
-						const gas = await ethereumClient.estimateGas(transaction, 'latest')
-						const chainId = await ethereumClient.chainId()
-						return await ethereumClient.sendTransaction({
-							type: '1559',
-							chainId,
-							nonce,
-							maxFeePerGas: 100n * 10n**9n,
-							maxPriorityFeePerGas: 10n**8n,
-							gas: gas * 10n / 8n,
-							...transaction,
-							accessList: [],
-						})
-					},
+					sendTransaction: ethereumClient.sendTransaction,
 				}
 			}
 		})

@@ -1,14 +1,14 @@
 import { ReadonlySignal, useSignalEffect } from "@preact/signals"
+import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
+import { contract } from "micro-web3"
+import { ERC20 } from "micro-web3/contracts/index.js"
+import { useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
 import { Wallet, toMicroWeb3 } from "../library/ethereum.js"
 import { useAsyncState } from "../library/preact-utilities.js"
 import { ETH_ADDRESS, assetsArray } from "../library/tokens.js"
-import { Refresh } from "./Refresh.js"
-import { useState } from "preact/hooks"
-import { contract } from "micro-web3"
-import { ERC20 } from "micro-web3/contracts/index.js"
-import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
 import { bigintToDecimalString } from "../library/utilities.js"
+import { Refresh } from "./Refresh.js"
 import { Spinner } from "./Spinner.js"
 
 export type BalancesModel = {
@@ -17,8 +17,8 @@ export type BalancesModel = {
 	readonly class?: JSX.HTMLAttributes['class']
 }
 export function Balances(model: BalancesModel) {
-	const [TokenBalances_] = useState(() => () => <>{assetsArray.map(token => <TokenBalance_ {...token}/>)}</>)
-	const [TokenBalance_] = useState(() => ({ symbol, address, decimals }: typeof assetsArray[number]) => {
+	const [TokenBalances_] = useState(() => () => <>{assetsArray.value.map(token => <TokenBalance_ {...token}/>)}</>)
+	const [TokenBalance_] = useState(() => ({ symbol, address, decimals }: typeof assetsArray.value[number]) => {
 		const { value, waitFor } = useAsyncState<bigint>()
 		const refresh = () => waitFor(async () => {
 			if (address === ETH_ADDRESS) {

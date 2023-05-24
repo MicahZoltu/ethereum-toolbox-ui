@@ -1,19 +1,19 @@
-import { JSX } from 'preact/jsx-runtime'
 import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from '@preact/signals'
 import { addressBigintToHex } from '@zoltu/ethereum-transactions/converters.js'
 import { contract } from 'micro-web3'
 import { ERC20, WETH, WETH_CONTRACT } from 'micro-web3/contracts/index.js'
-import { TOKENS, tokensBySymbol } from '../library/tokens.js'
-import { TokenAndAmount } from './TokenAndAmount.js'
-import { AddressPicker } from './AddressPicker.js'
-import { toMicroWeb3, Wallet } from '../library/ethereum.js'
-import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
-import { Spinner } from './Spinner.js'
 import { useState } from 'preact/hooks'
-import { Refresh } from './Refresh.js'
-import { Spacer } from './Spacer.js'
+import { JSX } from 'preact/jsx-runtime'
+import { Wallet, toMicroWeb3 } from '../library/ethereum.js'
+import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
+import { AssetDetails, ETH_DETAILS, WETH_DETAILS } from '../library/tokens.js'
 import { jsonStringify } from '../library/utilities.js'
 import { EthTransactionReceiptResult } from '../library/wire-types.js'
+import { AddressPicker } from './AddressPicker.js'
+import { Refresh } from './Refresh.js'
+import { Spacer } from './Spacer.js'
+import { Spinner } from './Spinner.js'
+import { TokenAndAmount } from './TokenAndAmount.js'
 
 const ROUTER_ADDRESS = 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45n
 const ROUTER_ABI = [
@@ -169,7 +169,7 @@ const QUOTER_ABI = [
 	}
 ] as const
 
-type Route = { userSpecifiedValue: 'source' | 'target', source: TOKENS, target: TOKENS, amountIn: bigint, amountOut: bigint, fee: bigint }
+type Route = { userSpecifiedValue: 'source' | 'target', source: AssetDetails, target: AssetDetails, amountIn: bigint, amountOut: bigint, fee: bigint }
 
 export type UniswapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
@@ -179,11 +179,11 @@ export type UniswapAndSendModel = {
 export function UniswapAndSend(model: UniswapAndSendModel) {
 	const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 
-	const sourceTokenSignal = useSignal<TOKENS>('ETH')
+	const sourceTokenSignal = useSignal<AssetDetails>(ETH_DETAILS)
 	const sourceAmount = useOptionalSignal<bigint>(undefined)
 	const { value: sourceAmountResult, waitFor: querySourceAmount, reset: _resetSourceAmount } = useAsyncState()
 	const recipient = useOptionalSignal<bigint>(undefined)
-	const targetTokenSignal = useSignal<TOKENS>('ETH')
+	const targetTokenSignal = useSignal<AssetDetails>(ETH_DETAILS)
 	const targetAmount = useOptionalSignal<bigint>(undefined)
 	const { value: targetAmountResult, waitFor: queryTargetAmount, reset: _resetTargetAmount } = useAsyncState()
 	const userSpecifiedValue = useOptionalSignal<'source' | 'target'>(undefined)
@@ -202,9 +202,9 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 		queryTargetAmount(async function () {
 			try {
 				const source = sourceTokenSignal.peek()
-				const tokenIn = addressBigintToHex(tokensBySymbol[source === 'ETH' ? 'WETH' : source].address)
+				const tokenIn = getTokenOrWethAddressString(source)
 				const target = targetTokenSignal.peek()
-				const tokenOut = addressBigintToHex(tokensBySymbol[target === 'ETH' ? 'WETH' : target].address)
+				const tokenOut = getTokenOrWethAddressString(target)
 
 				const transferOrWrap = () => {
 					return { amountOut: amountIn, fee: 0n }
@@ -221,7 +221,7 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 					return arrayOfResults.sort((a, b) => Number(b.amountOut - a.amountOut))[0]!
 				}
 
-				const { amountOut, fee } = (source === target || (source === 'ETH' && target === 'WETH') || (source === 'WETH' && target === 'ETH'))
+				const { amountOut, fee } = (source === target || (source.symbol === 'ETH' && target.symbol === 'WETH') || (source.symbol === 'WETH' && target.symbol === 'ETH'))
 					? transferOrWrap()
 					: await swapAndSend()
 
@@ -256,9 +256,9 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 		querySourceAmount(async function () {
 			try {
 				const source = sourceTokenSignal.peek()
-				const tokenIn = addressBigintToHex(tokensBySymbol[source === 'ETH' ? 'WETH' : source].address)
+				const tokenIn = getTokenOrWethAddressString(source)
 				const target = targetTokenSignal.peek()
-				const tokenOut = addressBigintToHex(tokensBySymbol[target === 'ETH' ? 'WETH' : target].address)
+				const tokenOut = getTokenOrWethAddressString(target)
 				
 				const transferOrWrap = () => ({ amountIn: amountOut, fee: 0n })
 				const swapAndSend = async () => {
@@ -272,7 +272,7 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 					const arrayOfResults = await Promise.all(arrayOfPromises)
 					return arrayOfResults.sort((a, b) => Number(a.amountIn - b.amountIn))[0]!
 				}
-				const { amountIn, fee } = (source === target || (source === 'ETH' && target === 'WETH') || (source === 'WETH' && target === 'ETH'))
+				const { amountIn, fee } = (source === target || (source.symbol === 'ETH' && target.symbol === 'WETH') || (source.symbol === 'WETH' && target.symbol === 'ETH'))
 					? transferOrWrap()
 					: await swapAndSend()
 
@@ -298,13 +298,13 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 	const [SourceToken_] = useState(() => () => {
 		if (sourceAmountResult.value.state === 'pending') return <Spinner/>
 		const [Refresh_] = useState(() => () => userSpecifiedValue.deepValue === 'target' && sourceAmount.value !== undefined && targetAmount.value !== undefined ? <Refresh onClick={targetAmountChanged}/> : <></>)
-		const [TokenAndAmount_] = useState(() => () => <TokenAndAmount key='source' token={sourceTokenSignal} amount={sourceAmount} onAmountChange={sourceAmountChanged} onTokenChange={() => userSpecifiedValue.deepPeek() === 'source' ? sourceAmountChanged() : targetAmountChanged()}/>)
+		const [TokenAndAmount_] = useState(() => () => <TokenAndAmount key='source' assetDetails={sourceTokenSignal} amount={sourceAmount} onAmountChange={sourceAmountChanged} onTokenChange={() => userSpecifiedValue.deepPeek() === 'source' ? sourceAmountChanged() : targetAmountChanged()}/>)
 		return <><Refresh_/><TokenAndAmount_/></>
 	})
 	const [TargetToken_] = useState(() => () => {
 		if (targetAmountResult.value.state === 'pending') return <Spinner/>
 		const [Refresh_] = useState(() => () => userSpecifiedValue.deepValue === 'source' && sourceAmount.value !== undefined && targetAmount.value !== undefined ? <Refresh onClick={sourceAmountChanged}/> : <></>)
-		const [TokenAndAmount_] = useState(() => () => <TokenAndAmount key='target' token={targetTokenSignal} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={() => userSpecifiedValue.deepPeek() === 'target' ? targetAmountChanged() : sourceAmountChanged()}/>)
+		const [TokenAndAmount_] = useState(() => () => <TokenAndAmount key='target' assetDetails={targetTokenSignal} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={() => userSpecifiedValue.deepPeek() === 'target' ? targetAmountChanged() : sourceAmountChanged()}/>)
 		return <><Refresh_/><TokenAndAmount_/></>
 	})
 	const [SwapButton_] = useState(() => () => <SwapButton wallet={model.wallet} route={route} recipient={recipient} userSpecifiedValue={userSpecifiedValue} sourceToken={sourceTokenSignal} targetToken={targetTokenSignal} sourceAmount={sourceAmount} targetAmount={targetAmount} error={error}/>)
@@ -320,8 +320,8 @@ type SwapButtonModel = {
 	readonly route: OptionalSignal<Route>
 	readonly recipient: OptionalSignal<bigint>
 	readonly userSpecifiedValue: OptionalSignal<'source' | 'target'>
-	readonly sourceToken: Signal<TOKENS>
-	readonly targetToken: Signal<TOKENS>
+	readonly sourceToken: Signal<AssetDetails>
+	readonly targetToken: Signal<AssetDetails>
 	readonly sourceAmount: OptionalSignal<bigint>
 	readonly targetAmount: OptionalSignal<bigint>
 	readonly error: OptionalSignal<string>
@@ -368,7 +368,7 @@ function SwapButton(model: SwapButtonModel) {
 			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(ROUTER_ADDRESS))
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
 			// special case for simple ETH transfers
-			if (route.source === 'ETH' && route.target === 'ETH') {
+			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
 				const { waitForReceipt } = await wallet.sendTransaction({
 					to: recipient,
 					value: route.amountIn,
@@ -377,37 +377,37 @@ function SwapButton(model: SwapButtonModel) {
 				return await waitForReceipt()
 			}
 			// special case for simple token transfers
-			if (route.source === route.target && route.source !== 'ETH') {
-				const tokenAddress = tokensBySymbol[route.source].address
+			if (route.source === route.target && typeof route.source.address === 'bigint') {
+				const tokenAddress = route.source.address
 				const token = contract(ERC20, microWeb3Provider, addressBigintToHex(tokenAddress))
 				const { waitForReceipt } = await wallet.sendTransaction({
 					to: tokenAddress,
-					value: route.amountIn,
+					value: 0n,
 					data: token.transfer.encodeInput({ to: addressBigintToHex(recipient), value: route.amountIn }),
 				})
 				return await waitForReceipt()
 			}
 			// special case for wrapping WETH
-			if (route.source === 'ETH' && route.target === 'WETH') {
+			if (route.source.symbol === 'ETH' && route.target.symbol === 'WETH') {
 				const { waitForReceipt } = await wallet.sendTransaction({
-					to: tokensBySymbol['WETH'].address,
+					to: WETH_DETAILS.address,
 					value: route.amountIn,
 					data: weth.deposit.encodeInput({}),
 				})
 				return await waitForReceipt()
 			}
 			// special case for unwrapping ETH
-			if (route.source === 'WETH' && route.target === 'ETH') {
+			if (route.source.symbol === 'WETH' && route.target.symbol === 'ETH') {
 				const { waitForReceipt } = await wallet.sendTransaction({
-					to: tokensBySymbol['WETH'].address,
+					to: WETH_DETAILS.address,
 					value: 0n,
 					data: weth.withdraw.encodeInput(route.amountIn)
 				})
 				return await waitForReceipt()
 			}
 			// swap and send
-			const tokenIn = addressBigintToHex(tokensBySymbol[(route.source === 'ETH') ? 'WETH' : route.source].address)
-			const tokenOut = addressBigintToHex(tokensBySymbol[(route.target === 'ETH') ? 'WETH' : route.target].address)
+			const tokenIn = getTokenOrWethAddressString(route.source)
+			const tokenOut = getTokenOrWethAddressString(route.target)
 			const transactions = [
 				route.userSpecifiedValue === 'source'
 					? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9995n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
@@ -421,7 +421,7 @@ function SwapButton(model: SwapButtonModel) {
 			const transaction = router.multicall.encodeInput({ deadline, data: transactions })
 			const { waitForReceipt } = await wallet.sendTransaction({
 				to: ROUTER_ADDRESS,
-				value: (route.source === 'ETH') ? route.amountIn : 0n,
+				value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
 				data: transaction,
 			})
 			return await waitForReceipt()
@@ -435,11 +435,11 @@ function SwapButton(model: SwapButtonModel) {
 				? model.recipient.deepValue === model.wallet.value.address
 					? 'Self Send'
 					: 'Send'
-				: model.sourceToken.value === 'ETH' && model.targetToken.value === 'WETH'
+				: model.sourceToken.value.symbol === 'ETH' && model.targetToken.value.symbol === 'WETH'
 					? model.recipient.deepValue === model.wallet.value.address
 						? 'Wrap'
 						: 'Wrap and Send'
-					: model.sourceToken.value === 'WETH' && model.targetToken.value === 'ETH'
+					: model.sourceToken.value.symbol === 'WETH' && model.targetToken.value.symbol === 'ETH'
 						? model.recipient.deepValue === model.wallet.value.address
 							? 'Unwap'
 							: 'Unwrap and Send'
@@ -451,4 +451,10 @@ function SwapButton(model: SwapButtonModel) {
 	return sendResult.value.state === 'pending'
 		? <Spinner/>
 		: <SwapButton_/>
+}
+
+function getTokenOrWethAddressString(asset: AssetDetails): string {
+	return addressBigintToHex(asset.symbol === 'ETH'
+		? WETH_DETAILS.address
+		: asset.address as bigint)
 }

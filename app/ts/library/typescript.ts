@@ -10,3 +10,11 @@ export type ResolvePromise<T> = T extends PromiseLike<infer R> ? R : never
 export type ReadWrite<T> = { -readonly [P in keyof T]: T[P] }
 
 export function assertNever(value: never): never { throw new Error(`Unhandled discriminated union member: ${JSON.stringify(value)}`) }
+
+// See: https://github.com/microsoft/TypeScript/issues/17002
+export function isArray(value: unknown): value is unknown[] {
+	return Array.isArray(value)
+}
+export function isReadonlyArray(value: unknown): value is readonly unknown[] {
+	return Array.isArray(value)
+}
