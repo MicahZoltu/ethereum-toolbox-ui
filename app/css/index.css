@@ -10,7 +10,7 @@ span,
 label {
 	display: inline-flex;
 }
-div, label {
+div, label, span {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.25em;

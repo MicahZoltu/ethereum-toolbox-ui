@@ -1,12 +1,14 @@
 import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from '@preact/signals'
-import { addressBigintToHex } from '@zoltu/ethereum-transactions/converters.js'
+import { addressBigintToHex, bigintToHex } from '@zoltu/ethereum-transactions/converters.js'
 import { contract } from 'micro-web3'
 import { ERC20, WETH, WETH_CONTRACT } from 'micro-web3/contracts/index.js'
 import { useState } from 'preact/hooks'
 import { JSX } from 'preact/jsx-runtime'
+import { savedWallets } from '../library/addresses.js'
 import { Wallet, toMicroWeb3 } from '../library/ethereum.js'
 import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
 import { AssetDetails, ETH_DETAILS, WETH_DETAILS } from '../library/tokens.js'
+import { ResolvePromise } from '../library/typescript.js'
 import { jsonStringify } from '../library/utilities.js'
 import { EthTransactionReceiptResult } from '../library/wire-types.js'
 import { AddressPicker } from './AddressPicker.js'
@@ -171,12 +173,12 @@ const QUOTER_ABI = [
 
 type Route = { userSpecifiedValue: 'source' | 'target', source: AssetDetails, target: AssetDetails, amountIn: bigint, amountOut: bigint, fee: bigint }
 
-export type UniswapAndSendModel = {
+export type SwapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
-export function UniswapAndSend(model: UniswapAndSendModel) {
+export function SwapAndSend(model: SwapAndSendModel) {
 	const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 
 	const sourceTokenSignal = useSignal<AssetDetails>(ETH_DETAILS)
@@ -308,7 +310,7 @@ export function UniswapAndSend(model: UniswapAndSendModel) {
 		return <><Refresh_/><TokenAndAmount_/></>
 	})
 	const [SwapButton_] = useState(() => () => <SwapButton wallet={model.wallet} route={route} recipient={recipient} userSpecifiedValue={userSpecifiedValue} sourceToken={sourceTokenSignal} targetToken={targetTokenSignal} sourceAmount={sourceAmount} targetAmount={targetAmount} error={error}/>)
-	const [Recipient_] = useState(() => () => <AddressPicker required address={recipient} extraOptions={[model.wallet.value.address]}/>)
+	const [Recipient_] = useState(() => () => <AddressPicker required address={recipient} extraOptions={[model.wallet.value.address, ...savedWallets.value]}/>)
 	return <div style={model.style} class={model.class}>
 		<div>Send <SourceToken_/> to <Recipient_/> as <TargetToken_/><Spacer/><SwapButton_/></div>
 		{error.value !== undefined && <div style={{ color: 'red' }}>{error.value}</div>}
@@ -367,64 +369,65 @@ function SwapButton(model: SwapButtonModel) {
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(ROUTER_ADDRESS))
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
-			// special case for simple ETH transfers
+			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.sendTransaction>>
 			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
-				const { waitForReceipt } = await wallet.sendTransaction({
+				// special case for simple ETH transfers
+				sendTransactionResult = await wallet.sendTransaction({
 					to: recipient,
 					value: route.amountIn,
 					data: new Uint8Array(0),
 				})
-				return await waitForReceipt()
-			}
-			// special case for simple token transfers
-			if (route.source === route.target && typeof route.source.address === 'bigint') {
+			} else if (route.source === route.target && typeof route.source.address === 'bigint') {
+				// special case for simple token transfers
 				const tokenAddress = route.source.address
 				const token = contract(ERC20, microWeb3Provider, addressBigintToHex(tokenAddress))
-				const { waitForReceipt } = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.sendTransaction({
 					to: tokenAddress,
 					value: 0n,
 					data: token.transfer.encodeInput({ to: addressBigintToHex(recipient), value: route.amountIn }),
 				})
-				return await waitForReceipt()
-			}
-			// special case for wrapping WETH
-			if (route.source.symbol === 'ETH' && route.target.symbol === 'WETH') {
-				const { waitForReceipt } = await wallet.sendTransaction({
+			} else if (route.source.symbol === 'ETH' && route.target.symbol === 'WETH') {
+				// special case for wrapping WETH
+				sendTransactionResult = await wallet.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: route.amountIn,
 					data: weth.deposit.encodeInput({}),
 				})
-				return await waitForReceipt()
-			}
-			// special case for unwrapping ETH
-			if (route.source.symbol === 'WETH' && route.target.symbol === 'ETH') {
-				const { waitForReceipt } = await wallet.sendTransaction({
+			} else if (route.source.symbol === 'WETH' && route.target.symbol === 'ETH') {
+				// special case for unwrapping ETH
+				sendTransactionResult = await wallet.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: 0n,
 					data: weth.withdraw.encodeInput(route.amountIn)
 				})
-				return await waitForReceipt()
+			} else {
+				// swap and send
+				const tokenIn = getTokenOrWethAddressString(route.source)
+				const tokenOut = getTokenOrWethAddressString(route.target)
+				const transactions = [
+					route.userSpecifiedValue === 'source'
+						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9995n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
+						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn * 10005n / 10000n, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
+					// TODO: figure out under what conditions each of these are actually necessary
+					router.sweepToken.encodeInput({ token: tokenIn, amountMinimum: 0n, recipient: recipientString }),
+					router.sweepToken.encodeInput({ token: tokenOut, amountMinimum: 0n, recipient: recipientString }),
+					router.unwrapWETH9.encodeInput({amountMinimum: 0n, recipient: recipientString}),
+					router.refundETH.encodeInput({}),
+				]
+				const transaction = router.multicall.encodeInput({ deadline, data: transactions })
+				sendTransactionResult = await wallet.sendTransaction({
+					to: ROUTER_ADDRESS,
+					value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
+					data: transaction,
+				})
 			}
-			// swap and send
-			const tokenIn = getTokenOrWethAddressString(route.source)
-			const tokenOut = getTokenOrWethAddressString(route.target)
-			const transactions = [
-				route.userSpecifiedValue === 'source'
-					? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9995n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
-					: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn * 10005n / 10000n, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
-				// TODO: figure out under what conditions each of these are actually necessary
-				router.sweepToken.encodeInput({ token: tokenIn, amountMinimum: 0n, recipient: recipientString }),
-				router.sweepToken.encodeInput({ token: tokenOut, amountMinimum: 0n, recipient: recipientString }),
-				router.unwrapWETH9.encodeInput({amountMinimum: 0n, recipient: recipientString}),
-				router.refundETH.encodeInput({}),
-			]
-			const transaction = router.multicall.encodeInput({ deadline, data: transactions })
-			const { waitForReceipt } = await wallet.sendTransaction({
-				to: ROUTER_ADDRESS,
-				value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
-				data: transaction,
-			})
-			return await waitForReceipt()
+			const receipt = await sendTransactionResult.waitForReceipt()
+			if (receipt === null) throw new Error(`No transactoin receipt found for transaction ${bigintToHex(sendTransactionResult.transactionHash)}.`)
+			if (receipt.status === 'failure') throw new Error(`Transaction mined but reverted, no changes made.`)
+			model.sourceAmount.clear()
+			model.targetAmount.clear()
+			model.recipient.clear()
+			return receipt
 		})
 	}
 

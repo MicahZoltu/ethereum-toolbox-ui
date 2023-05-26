@@ -15,8 +15,6 @@ export function TokenAndAmount(model: TokenAndAmountModel) {
 
 	// token changed
 	function onTokenChange(newValue: AssetDetails, oldValue?: AssetDetails) {
-		const amount = model.amount.deepPeek()
-		if (amount === undefined) return
 		model.onTokenChange && model.onTokenChange(newValue, oldValue)
 	}
 

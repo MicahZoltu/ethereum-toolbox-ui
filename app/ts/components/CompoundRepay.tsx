@@ -1,15 +1,16 @@
 import { ReadonlySignal, Signal, useSignal, useSignalEffect } from "@preact/signals"
 import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
 import { contract } from "micro-web3"
+import { useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
+import { savedWallets } from "../library/addresses.js"
 import { Wallet, toMicroWeb3 } from "../library/ethereum.js"
 import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { bigintToDecimalString } from "../library/utilities.js"
 import { AddressPicker } from "./AddressPicker.js"
 import { FixedPointInput } from "./FixedPointInput.js"
-import { Spinner } from "./Spinner.js"
 import { Refresh } from "./Refresh.js"
-import { useState } from "preact/hooks"
+import { Spinner } from "./Spinner.js"
 
 const CETH_REPAY_HELPER = 0xf859A1AD94BcF445A406B892eF0d3082f4174088n
 const CETH_REPAY_HELPER_ABI = [{"constant":false,"inputs":[{"name":"borrower","type":"address"},{"name":"cEther_","type":"address"}],"name":"repayBehalfExplicit","outputs":[],"payable":true,"stateMutability":"payable","type":"function"}] as const
@@ -37,7 +38,7 @@ export function CompoundRepay(model: CompoundRepayModel) {
 		submitError.clear()
 	}
 
-	const [BorrowerSelector_] = useState(() => () => <AddressPicker required address={maybeBorrower} extraOptions={[model.wallet.value.address]}/>)
+	const [BorrowerSelector_] = useState(() => () => <AddressPicker required address={maybeBorrower} extraOptions={[model.wallet.value.address, ...savedWallets.value]}/>)
 	const [Suffix_] = useState(() => () => {
 		const borrower = maybeBorrower.value
 		if (borrower === undefined) return <></>

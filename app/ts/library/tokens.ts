@@ -62,14 +62,27 @@ function getTokensFromLocalStorage() {
 }
 
 export function addToken(tokenDetails: TokenDetails) {
-	const storedTokenWithSymbol = tokensBySymbol.value[tokenDetails.symbol]
-	if (storedTokenWithSymbol !== undefined) {
-		if (tokenDetails.address === storedTokenWithSymbol.address && tokenDetails.decimals === storedTokenWithSymbol.decimals) return
+	const storedToken = tokensBySymbol.value[tokenDetails.symbol]
+	if (storedToken !== undefined) {
+		if (tokenDetails.address === storedToken.address && tokenDetails.decimals === storedToken.decimals) return
 		else throw new Error(`Token with symbol ${tokenDetails.symbol} already exists.`)
 	}
 	const savedTokens = getTokensFromLocalStorage()
 	savedTokens.push(tokenDetails)
 	window.localStorage.setItem(storageKey, jsonStringify(savedTokens))
+	// note: this will trigger Signal subscriptions, so we do it as a tail call
+	regenerate()
+}
+
+export function removeToken(tokenDetails: TokenDetails) {
+	const savedTokens = getTokensFromLocalStorage()
+	const updatedTokens = savedTokens.filter(token => {
+		if (token.address !== tokenDetails.address) return true
+		if (token.decimals !== tokenDetails.decimals) return true
+		if (token.symbol !== tokenDetails.symbol) return true
+		return false
+	})
+	window.localStorage.setItem(storageKey, jsonStringify(updatedTokens))
 	// note: this will trigger Signal subscriptions, so we do it as a tail call
 	regenerate()
 }

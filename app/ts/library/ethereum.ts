@@ -1,9 +1,9 @@
 import { TransactionUnsigned } from '@zoltu/ethereum-transactions'
+import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
+import { contract } from 'micro-web3'
 import { HexAddress } from './typescript.js'
 import { jsonStringify } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumBytes32, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
-import { contract } from 'micro-web3'
-import { addressBigintToHex, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -158,6 +158,15 @@ export class EthereumClientContract extends EthereumClient {
 				{"internalType": "address","name": "","type": "address"}
 			],
 		},
+		{
+			"name": "owner",
+			"type": "function",
+			"stateMutability": "view",
+			"inputs": [],
+			"outputs": [
+				{"internalType": "address","name": "","type": "address"}
+			],
+		},
 	] as const, toMicroWeb3(this))
 
 	public constructor(
@@ -207,6 +216,14 @@ export class EthereumClientContract extends EthereumClient {
 			...outerTransaction,
 			gas: innerTransaction.gas ?? await this.underlyingClient.estimateGas(outerTransaction, 'latest')
 		})
+	}
+
+	public readonly getOwner = async () => {
+		const result = await this.underlyingClient.call({
+			to: this.address,
+			data: this.walletContract.owner.encodeInput({})
+		}, 'latest')
+		return bytesToBigint(result)
 	}
 }
 

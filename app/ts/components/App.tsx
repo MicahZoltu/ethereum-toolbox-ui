@@ -4,7 +4,7 @@ import { useOptionalSignal } from '../library/preact-utilities.js'
 import { Balances } from './Balances.js'
 import { CompoundBorrow } from './CompoundBorrow.js'
 import { CompoundRepay } from './CompoundRepay.js'
-import { UniswapAndSend } from './UniswapAndSend.js'
+import { SwapAndSend } from './SwapAndSend.js'
 import { WalletChooser } from './WalletChooser.js'
 
 export interface AppModel {
@@ -21,7 +21,7 @@ export function App(_model: AppModel) {
 export function Apps(model: {wallet: ReadonlySignal<Wallet>}) {
 	return <>
 		<Balances wallet={model.wallet} class='widget'/>
-		<UniswapAndSend wallet={model.wallet} class='widget'/>
+		<SwapAndSend wallet={model.wallet} class='widget'/>
 		<CompoundBorrow wallet={model.wallet} class='widget'/>
 		<CompoundRepay wallet={model.wallet} class='widget'/>
 	</>
