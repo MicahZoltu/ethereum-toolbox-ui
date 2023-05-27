@@ -406,8 +406,8 @@ function SwapButton(model: SwapButtonModel) {
 				const tokenOut = getTokenOrWethAddressString(route.target)
 				const transactions = [
 					route.userSpecifiedValue === 'source'
-						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9995n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
-						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn * 10005n / 10000n, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
+						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9990n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
+						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn * 10010n / 10000n, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
 					// TODO: figure out under what conditions each of these are actually necessary
 					router.sweepToken.encodeInput({ token: tokenIn, amountMinimum: 0n, recipient: recipientString }),
 					router.sweepToken.encodeInput({ token: tokenOut, amountMinimum: 0n, recipient: recipientString }),

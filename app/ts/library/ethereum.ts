@@ -1,7 +1,7 @@
 import { TransactionUnsigned } from '@zoltu/ethereum-transactions'
 import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
 import { contract } from 'micro-web3'
-import { HexAddress } from './typescript.js'
+import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumBytes32, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
 
@@ -70,7 +70,16 @@ export abstract class EthereumClient {
 	public readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters) => {
 		const result = await this.request({ method: 'eth_sendTransaction', params: [{...this.address ? {from: this.address} : {}, ...transaction}] })
 		const transactionHash = EthSendTransactionResult.parse(result)
-		return { transactionHash, waitForReceipt: () => this.getTransactionReceipt(transactionHash) }
+		return {
+			transactionHash,
+			waitForReceipt: async () => {
+				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
+				do {
+					receipt = await this.getTransactionReceipt(transactionHash)
+				} while (receipt === null)
+				return receipt
+			}
+		}
 	}
 
 	public readonly getTransactionReceipt = async (...params: EthGetTransactionReceiptParameters) => {
