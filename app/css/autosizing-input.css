@@ -8,7 +8,7 @@ span {
 	line-break: anywhere;
 }
 input:focus-within {
-	outline-color: red;
+	outline-color: var(--error-border);
 }
 span,
 label {
@@ -48,7 +48,7 @@ label::after {
 	padding-inline: 3px;
 }
 label input:invalid {
-	background-color: lightpink;
+	outline-color: var(--error-border);
 }
 input:focus {
 	outline: none;

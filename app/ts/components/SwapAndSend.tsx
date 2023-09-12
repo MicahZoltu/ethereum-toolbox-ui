@@ -218,7 +218,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 3000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 3000n },
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 10000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 10000n },
 					]
-					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountOut: (await x.promise).amountOut, fee: x.fee }))
+					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountOut: (await x.promise).amountOut * 9990n / 10000n, fee: x.fee }))
 					const arrayOfResults = await Promise.all(arrayOfPromises)
 					return arrayOfResults.sort((a, b) => Number(b.amountOut - a.amountOut))[0]!
 				}
@@ -239,7 +239,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 				error.deepValue =
 					(typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string') ? caught.message
 					: (typeof caught === 'string') ? caught
-					: jsonStringify(error)
+					: jsonStringify(error, '\t')
 				targetAmount.clear()
 				route.clear()
 			}
@@ -270,7 +270,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 3000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 3000n },
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 10000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 10000n },
 					]
-					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountIn: (await x.promise).amountIn, fee: x.fee }))
+					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountIn: (await x.promise).amountIn * 10010n / 10000n, fee: x.fee }))
 					const arrayOfResults = await Promise.all(arrayOfPromises)
 					return arrayOfResults.sort((a, b) => Number(a.amountIn - b.amountIn))[0]!
 				}
@@ -290,7 +290,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 				error.deepValue =
 					(typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string') ? caught.message
 					: (typeof caught === 'string') ? caught
-					: jsonStringify(error)
+					: jsonStringify(error, '\t')
 				sourceAmount.clear()
 				route.clear()
 			}
@@ -369,10 +369,10 @@ function SwapButton(model: SwapButtonModel) {
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(ROUTER_ADDRESS))
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
-			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.sendTransaction>>
+			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
 			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
 				// special case for simple ETH transfers
-				sendTransactionResult = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: recipient,
 					value: route.amountIn,
 					data: new Uint8Array(0),
@@ -381,21 +381,21 @@ function SwapButton(model: SwapButtonModel) {
 				// special case for simple token transfers
 				const tokenAddress = route.source.address
 				const token = contract(ERC20, microWeb3Provider, addressBigintToHex(tokenAddress))
-				sendTransactionResult = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: tokenAddress,
 					value: 0n,
 					data: token.transfer.encodeInput({ to: addressBigintToHex(recipient), value: route.amountIn }),
 				})
 			} else if (route.source.symbol === 'ETH' && route.target.symbol === 'WETH') {
 				// special case for wrapping WETH
-				sendTransactionResult = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: route.amountIn,
 					data: weth.deposit.encodeInput({}),
 				})
 			} else if (route.source.symbol === 'WETH' && route.target.symbol === 'ETH') {
 				// special case for unwrapping ETH
-				sendTransactionResult = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: 0n,
 					data: weth.withdraw.encodeInput(route.amountIn)
@@ -406,8 +406,8 @@ function SwapButton(model: SwapButtonModel) {
 				const tokenOut = getTokenOrWethAddressString(route.target)
 				const transactions = [
 					route.userSpecifiedValue === 'source'
-						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut * 9990n / 10000n, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
-						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn * 10010n / 10000n, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
+						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
+						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
 					// TODO: figure out under what conditions each of these are actually necessary
 					router.sweepToken.encodeInput({ token: tokenIn, amountMinimum: 0n, recipient: recipientString }),
 					router.sweepToken.encodeInput({ token: tokenOut, amountMinimum: 0n, recipient: recipientString }),
@@ -415,7 +415,7 @@ function SwapButton(model: SwapButtonModel) {
 					router.refundETH.encodeInput({}),
 				]
 				const transaction = router.multicall.encodeInput({ deadline, data: transactions })
-				sendTransactionResult = await wallet.sendTransaction({
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: ROUTER_ADDRESS,
 					value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
 					data: transaction,
@@ -449,7 +449,8 @@ function SwapButton(model: SwapButtonModel) {
 						: model.recipient.deepValue === model.wallet.value.address
 							? 'Swap'
 							: 'Swap and Send'
-		return <button onClick={onClick}>{text}</button>
+		const disabled = model.recipient.deepValue !== model.wallet.value.address && ((model.sourceToken.value.symbol === 'ETH' && model.targetToken.value.symbol === 'WETH') || (model.sourceToken.value.symbol === 'WETH' && model.targetToken.value.symbol === 'ETH'))
+		return <button onClick={onClick} disabled={disabled}>{text}</button>
 	})
 	return sendResult.value.state === 'pending'
 		? <Spinner/>
