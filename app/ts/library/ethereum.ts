@@ -1,9 +1,10 @@
-import { TransactionUnsigned } from '@zoltu/ethereum-transactions'
+import { encodeTransaction, signTransaction as signTransactionWithKey } from '@zoltu/ethereum-transactions'
 import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
+import { signTransaction as signTransactionWithLedger } from '@zoltu/ethereum-ledger'
 import { contract } from 'micro-web3'
 import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify } from './utilities.js'
-import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumBytes32, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
+import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -19,7 +20,6 @@ export type Wallet = {
 	readonly readonly: false
 	readonly ethereumClient: IEthereumClient
 	readonly address: bigint
-	readonly sendTransaction: (transaction: Omit<TransactionUnsigned, 'type' | 'chainId' | 'nonce' | 'gasLimit' | 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'>) => Promise<{ transactionHash: EthereumBytes32, waitForReceipt: () => Promise<EthTransactionReceiptResult>}>
 }
 
 export type IProvider = {
@@ -184,6 +184,8 @@ export class EthereumClientContract extends EthereumClient {
 		public override readonly address: bigint,
 	) {
 		super()
+		// TODO: make sure underlynig address matches owner
+		// TODO: make sure this is a recoverable wallet during construction
 		this.underlyingAddress
 	}
 
@@ -233,6 +235,92 @@ export class EthereumClientContract extends EthereumClient {
 			data: this.walletContract.owner.encodeInput({})
 		}, 'latest')
 		return bytesToBigint(result)
+	}
+}
+
+export class EthereumClientMemory extends EthereumClient {
+	public constructor(
+		private readonly underlyingClient: IEthereumClient,
+		private readonly privateKey: bigint,
+		public override readonly address: bigint,
+	) {
+		super()
+	}
+
+	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
+
+	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
+		const nonce = await this.getTransactionCount(this.address, 'latest')
+		const gasLimit = await this.estimateGas(transaction, 'latest')
+		const chainId = await this.chainId()
+		const signedTransaction = await signTransactionWithKey({
+			type: '1559',
+			chainId,
+			nonce,
+			maxFeePerGas: 100n * 10n**9n,
+			maxPriorityFeePerGas: 10n**8n,
+			gasLimit,
+			to: transaction.to || null,
+			value: transaction.value || 0n,
+			data: transaction.data || new Uint8Array(0),
+			accessList: [],
+		}, this.privateKey)
+		const encodedTransaction = encodeTransaction(signedTransaction)
+		const transactionHash = await this.sendRawTransaction(encodedTransaction)
+		return {
+			transactionHash,
+			waitForReceipt: async () => {
+				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
+				do {
+					receipt = await this.getTransactionReceipt(transactionHash)
+				} while (receipt === null)
+				return receipt
+			}
+		}
+	}
+}
+
+export class EthereumClientLedger extends EthereumClient {
+	public constructor(
+		private readonly underlyingClient: IEthereumClient,
+		private readonly derivationPath: string,
+		public override readonly address: bigint,
+	) {
+		super()
+	}
+
+	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
+
+	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
+		const nonce = await this.getTransactionCount(this.address, 'latest')
+		const gasLimit = await this.estimateGas(transaction, 'latest')
+		const chainId = await this.chainId()
+		const unsignedUnencodedTransaction = {
+			type: '1559',
+			chainId,
+			nonce,
+			maxFeePerGas: 100n * 10n**9n,
+			maxPriorityFeePerGas: 10n**8n,
+			gasLimit,
+			to: transaction.to || null,
+			value: transaction.value || 0n,
+			data: transaction.data || new Uint8Array(0),
+			accessList: [],
+		} as const
+		const unsignedEncodedTransaction = await encodeTransaction(unsignedUnencodedTransaction)
+		const signature = await signTransactionWithLedger(unsignedEncodedTransaction, this.derivationPath)
+		const encodedTransaction = encodeTransaction({ ...unsignedUnencodedTransaction, yParity: signature.v, r: signature.r, s: signature.s })
+		const transactionHash = await this.sendRawTransaction(encodedTransaction)
+		return {
+			transactionHash,
+			waitForReceipt: async () => {
+				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
+				do {
+					receipt = await this.getTransactionReceipt(transactionHash)
+				} while (receipt === null)
+				return receipt
+			}
+		}
 	}
 }
 

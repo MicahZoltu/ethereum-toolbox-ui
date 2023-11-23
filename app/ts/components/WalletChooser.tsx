@@ -1,41 +1,45 @@
-import { ReadonlySignal, useSignal, useSignalEffect } from "@preact/signals"
-import { HDKey } from "@scure/bip32"
+import { utils as secp256k1Utils } from '@noble/secp256k1'
+import { ReadonlySignal, batch, useSignal, useSignalEffect } from '@preact/signals'
+import { HDKey } from '@scure/bip32'
 import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
 import { wordlist } from '@zoltu/bip39/wordlists/english.js'
-import { encodeTransaction, getAddress, signTransaction } from '@zoltu/ethereum-transactions'
-import { addressBigintToHex, bytesToBigint } from "@zoltu/ethereum-transactions/converters.js"
-import { useState } from "preact/hooks"
-import { JSX } from "preact/jsx-runtime"
-import { forgetWalletAddress, forgetContractWalletAddress, forgetWindowWalletAddress, rememberContractWalletAddress, rememberWindowWalletAddress, savedContractWallets, savedWindowWallets, savedWallets } from "../library/addresses.js"
-import { EthereumClientContract, EthereumClientJsonRpc, EthereumClientWindow, IEthereumClient, Wallet } from "../library/ethereum.js"
-import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
-import { AddressPicker } from "./AddressPicker.js"
-import { AutosizingInput } from "./AutosizingInput.js"
-import { RpcChooser } from "./RpcChooser.js"
-import { Select } from "./Select.js"
-import { Spinner } from "./Spinner.js"
-import { Refresh } from "./Refresh.js"
+import { getAddress as getAddressFromPrivateKey } from '@zoltu/ethereum-transactions'
+import { addressBigintToHex, bigintToHex, bytesToBigint } from '@zoltu/ethereum-transactions/converters.js'
+import { getAddress as getAddressFromLedger } from '@zoltu/ethereum-ledger'
+import { useState } from 'preact/hooks'
+import { JSX } from 'preact/jsx-runtime'
+import { forgetWalletAddress, forgetContractWalletAddress, forgetWindowWalletAddress, rememberContractWalletAddress, rememberWindowWalletAddress, savedContractWallets, savedWindowWallets, savedWallets, rememberLedgerWalletAddress } from '../library/addresses.js'
+import { EthereumClientContract, EthereumClientJsonRpc, EthereumClientLedger, EthereumClientMemory, EthereumClientWindow, Wallet } from '../library/ethereum.js'
+import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
+import { AddressPicker } from './AddressPicker.js'
+import { AutosizingInput } from './AutosizingInput.js'
+import { RpcChooser } from './RpcChooser.js'
+import { Select } from './Select.js'
+import { Spinner } from './Spinner.js'
+import { Refresh } from './Refresh.js'
 
 export interface WalletChooserModel {
 	readonly wallet: OptionalSignal<Wallet>
+	readonly error?: OptionalSignal<string>
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
 export function WalletChooser(model: WalletChooserModel) {
-	const walletType = useSignal<'readonly' | 'memory' | 'window' | 'contract'>('readonly')
+	const walletType = useSignal<'readonly' | 'memory' | 'window' | 'contract' | 'ledger'>('readonly')
 	const error = useOptionalSignal<string>(undefined)
 	useSignalEffect(() => walletType.value && model.wallet.clear())
 	const [WalletBuilder_] = useState(() => () => {
 		switch (walletType.value) {
-			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} error={error}/>
-			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} error={error}/>
-			case 'window': return <WindowWalletBuilder wallet={model.wallet} error={error}/>
-			case 'contract': return <ContractWalletBuilder wallet={model.wallet} error={error}/>
+			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} error={model.error || error}/>
+			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} error={model.error || error}/>
+			case 'window': return <WindowWalletBuilder wallet={model.wallet} error={model.error || error}/>
+			case 'contract': return <ContractWalletBuilder wallet={model.wallet} error={model.error || error}/>
+			case 'ledger': return <LedgerWalletBuilder wallet={model.wallet} error={model.error || error}/>
 		}
 	})
-	const [Error_] = useState(() => () => error.deepValue ? <div style={{ color: 'red' }}>{error}</div> : <></>)
+	const [Error_] = useState(() => () => error.deepValue && model.error === undefined ? <div style={{ color: 'red' }}>{error}</div> : <></>)
 	return <div style={model.style} class={model.class}>
-		<div><Select options={['readonly', 'memory', 'window', 'contract']} selected={walletType} /><WalletBuilder_/></div>
+		<div><Select options={['readonly', 'memory', 'window', 'contract', 'ledger']} selected={walletType} /><WalletBuilder_/></div>
 		<Error_/>
 	</div>
 }
@@ -67,7 +71,6 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: O
 			} else {
 				return <button onClick={() => rememberWindowWalletAddress(address)} style={{width:'100%'}}>Remember</button>
 			}
-			
 		})
 		return <div style={{ flexGrow: 1 }}>
 			<div style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
@@ -130,7 +133,7 @@ function ContractWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: O
 	const [SignerWallet_] = useState(() => () => {
 		return <div style={{ flexDirection: 'column', border: '1px dashed blue', padding: '3px' }}>
 			<div>Signer:</div>
-			<WalletChooser wallet={underlyingWallet}/>
+			<WalletChooser wallet={underlyingWallet} error={model.error}/>
 		</div>
 	})
 	const [RememberButton_] = useState(()=> () => {
@@ -176,12 +179,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: Opt
 		} else {
 			const address = asyncAddress.value.value
 			ethereumClient.address = address
-			model.wallet.deepValue = {
-				readonly: false,
-				ethereumClient,
-				address: address,
-				sendTransaction: ethereumClient.sendTransaction,
-			}
+			model.wallet.deepValue = { readonly: false, ethereumClient, address }
 		}
 	})
 	const requestAccounts = () => waitForAccount(async () => {
@@ -206,7 +204,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: Opt
 			case 'inactive': return <>Unexpected state, please report bug to developer.</>
 			case 'pending': return <>Loading accounts... <Spinner/></>
 			case 'resolved': return asyncAddress.value.value !== undefined ? <>Address:<code>{addressBigintToHex(asyncAddress.value.value)}</code></> : <>No accounts provided by browser wallet.</>
-			case 'rejected': return <>Error while retrieving accounts from browser wallet: ${asyncAddress.value.error.message}</>
+			case 'rejected': return <>Error while retrieving accounts from browser wallet: {asyncAddress.value.error.message}</>
 		}
 	})
 	return <div style={{ flexGrow: 1 }}>
@@ -217,48 +215,90 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: Opt
 	</div>
 }
 
+function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: OptionalSignal<string> }) {
+	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
+	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
+	const { value: asyncWalletBuild, waitFor: waitForWalletBuild } = useAsyncState()
+	useSignalEffect(() => batch(() => {
+		if (asyncWalletBuild.value.state === 'rejected') {
+			model.error.deepValue = asyncWalletBuild.value.error.message
+		}
+		if (asyncWalletBuild.value.state === 'pending' || maybeEthereumClientRpc.deepValue === undefined || maybeDerivationPath.deepValue === undefined) {
+			model.wallet.clear()
+		}
+	}))
+	const [Address_] = useState(() => () => {
+		const wallet = model.wallet.deepValue
+		if (wallet === undefined) return <></>
+		return <div>Address:<code>{addressBigintToHex(wallet.address)}</code></div>
+	})
+	const [ChangeButton_] = useState(() => () => <button onClick={() => { maybeEthereumClientRpc.clear() }} style={{width: '100%'}}>Change</button>)
+	const [RememberButton_] = useState(() => () => {
+		const wallet = model.wallet.deepValue
+		if (wallet === undefined) return <></>
+		if (savedWallets.value.includes(wallet.address)) {
+			return <button onClick={() => forgetWalletAddress(wallet.address)} style={{width:'100%'}}>Forget</button>
+		} else {
+			return <button onClick={() => rememberLedgerWalletAddress(wallet.address)} style={{width:'100%'}}>Remember</button>
+		}
+	})
+	const [DerivationPathPicker_] = useState(() => () => {
+		function onClick() {
+			waitForWalletBuild(async () => {
+				const ethereumClientRpc = maybeEthereumClientRpc.deepValue
+				const derivationPath = maybeDerivationPath.deepValue
+				if (ethereumClientRpc === undefined) throw new Error(`JSON-RPC Ethereum Client required.`)
+				if (derivationPath === undefined) throw new Error(`Derivation path required.`)
+				const address = await getAddressFromLedger(derivationPath)
+				const ethereumClient = new EthereumClientLedger(ethereumClientRpc, derivationPath, address)
+				model.wallet.deepValue = { address, ethereumClient, readonly: false }
+			})
+		}
+		return <div><DerivationPathPicker value={maybeDerivationPath}/><button onClick={onClick} disabled={maybeDerivationPath.deepValue === undefined}>Next</button></div>
+	})
+	if (maybeEthereumClientRpc.deepValue === undefined) {
+		return <RpcChooser ethereumClient={maybeEthereumClientRpc} error={model.error}/>
+	} else if (maybeDerivationPath.deepValue === undefined || asyncWalletBuild.value.state === 'inactive' || asyncWalletBuild.value.state === 'rejected') {
+		return <DerivationPathPicker_/>
+	} else if (asyncWalletBuild.value.state === 'pending') {
+		return <Spinner/>
+	} else {
+		return <div id='ledger-builder' style={{ flexGrow: 1 }}>
+			<div style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
+				<Address_/>
+			</div>
+			<div style={{ flexDirection: 'column' }}>
+				<ChangeButton_/>
+				<RememberButton_/>
+			</div>
+		</div>
+	}
+}
+
 function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, error: OptionalSignal<string> }) {
-	const ethereumClientSignal = useOptionalSignal<IEthereumClient>(undefined)
-	const privateKeySignal = useOptionalSignal<bigint>(undefined)
+	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
+	const maybeEthereumClientMemory = useOptionalSignal<EthereumClientMemory>(undefined)
+	const maybePrivateKey = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
-		const ethereumClient = ethereumClientSignal.deepValue
-		const privateKey = privateKeySignal.deepValue
-		if (ethereumClient === undefined) {
+		const ethereumClientRpc = maybeEthereumClientRpc.deepValue
+		const privateKey = maybePrivateKey.deepValue
+		if (ethereumClientRpc === undefined) {
 			model.wallet.clear()
 		} else if (privateKey === undefined) {
 			model.wallet.clear()
 		} else {
-			const address = getAddress(privateKey)
-			model.wallet.deepValue = ({ readonly: false, address, ethereumClient, sendTransaction: async transaction => {
-				const nonce = await ethereumClient.getTransactionCount(address, 'latest')
-				const gasLimit = await ethereumClient.estimateGas(transaction, 'latest')
-				const chainId = await ethereumClient.chainId()
-				const signedTransaction = await signTransaction({
-					type: '1559',
-					chainId,
-					nonce,
-					maxFeePerGas: 100n * 10n**9n,
-					maxPriorityFeePerGas: 10n**8n,
-					gasLimit,
-					...transaction,
-					accessList: [],
-				}, privateKey)
-				const encodedTransaction = encodeTransaction(signedTransaction)
-				const transactionHash = await ethereumClient.sendRawTransaction(encodedTransaction)
-				return {
-					transactionHash,
-					waitForReceipt: async () => await ethereumClient.getTransactionReceipt(transactionHash)
-				}
-			}})
+			const address = getAddressFromPrivateKey(privateKey)
+			const ethereumClient = maybeEthereumClientMemory.deepValue = new EthereumClientMemory(ethereumClientRpc, privateKey, address)
+			model.wallet.deepValue = ({ readonly: false, address, ethereumClient })
 		}
 	})
-	const [ChangeAccountButton_] = useState(() => () => <button onClick={() => { ethereumClientSignal.value = privateKeySignal.value = undefined }} style={{ marginLeft: 'auto' }}>Change Wallet</button>)
-	if (ethereumClientSignal.value === undefined) {
-		return <RpcChooser ethereumClient={ethereumClientSignal} error={model.error}/>
-	} else if (privateKeySignal.value === undefined) {
-		return <KeySelector privateKey={privateKeySignal}/>
+	const [ChangeAccountButton_] = useState(() => () => <button onClick={() => { maybeEthereumClientRpc.value = maybePrivateKey.value = undefined }} style={{ marginLeft: 'auto' }}>Change Wallet</button>)
+	if (maybeEthereumClientRpc.value === undefined) {
+		return <RpcChooser ethereumClient={maybeEthereumClientRpc} error={model.error}/>
+	} else if (maybePrivateKey.value === undefined) {
+		return <KeySelector privateKey={maybePrivateKey}/>
 	} else {
-		return <div style={{ flexGrow: 1 }}>Address:<code>{addressBigintToHex(getAddress(privateKeySignal.value.value))}</code><ChangeAccountButton_/></div>
+		return <div style={{ flexGrow: 1 }}>Address:<code>{addressBigintToHex(getAddressFromPrivateKey(maybePrivateKey.value.value))}</code>Private Key:<code class='secret'>{bigintToHex(maybePrivateKey.value.value, 32)}</code><ChangeAccountButton_/></div>
 	}
 }
 
@@ -292,8 +332,9 @@ function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: OptionalSignal<Uint8A
 		const [ChangeButton_] = useState(() => () => <button onClick={reset} style={{ marginLeft: 'auto' }}>Change</button>)
 		const [Input_] = useState(() => () => <AutosizingInput type='password' autocomplete='off' placeholder='zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong' value={internalValue}/>)
 		const [NextButton_] = useState(() => () => <button onClick={onClick}>Next</button>)
+		const [RandomButton_] = useState(() => () => <button onClick={() => privateKey.deepValue = bytesToBigint(secp256k1Utils.randomPrivateKey())}>Random</button>)
 		switch (value.value.state) {
-			case 'inactive': return <><label>Mnemonic or Private Key<Input_/></label><NextButton_/></>
+			case 'inactive': return <><label>Mnemonic or Private Key<Input_/></label><RandomButton_/><NextButton_/></>
 			case 'pending': return <>Validating {internalValue.value}...<Spinner/></>
 			case 'rejected': return <><span style={{ color: 'red' }}>{value.value.error.message}</span><ChangeButton_/></>
 			case 'resolved': return <>{internalValue.value} <ChangeButton_/></>
@@ -303,10 +344,12 @@ function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: OptionalSignal<Uint8A
 }
 
 function DerivationPathPrompt({ seed, privateKey}: { seed: ReadonlySignal<Uint8Array>, privateKey: OptionalSignal<bigint> }) {
-	const derivationPath = useSignal(`m/44'/60'/0'/0/0`)
+	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
 	function onClick() {
+		const derivationPath = maybeDerivationPath.deepPeek()
+		if (derivationPath === undefined) return
 		const hdKey = HDKey.fromMasterSeed(seed.value)
-		const derivedHdKey = hdKey.derive(derivationPath.peek())
+		const derivedHdKey = hdKey.derive(derivationPath)
 		const maybePrivateKey = derivedHdKey.privateKey
 		if (maybePrivateKey === null) {
 			// TODO: figure out if this is actually possible
@@ -317,9 +360,16 @@ function DerivationPathPrompt({ seed, privateKey}: { seed: ReadonlySignal<Uint8A
 	return <div style={{ flexGrow: 1 }}>
 		<label>
 			Derivation Path&thinsp;
-			<AutosizingInput type='text' pattern="^m(?:\/\d+'?)+$" placeholder="m/44'/60'/0'/0/0" value={derivationPath} dataList={[`m/44'/60'/0'/0/0`]}/>
+			<DerivationPathPicker value={maybeDerivationPath}/>
 		</label>
 		&thinsp;
 		<button onClick={onClick} style={{ marginLeft: 'auto' }}>Next</button>
 	</div>
+}
+
+function DerivationPathPicker({ value: maybeDerivationPath }: { value: OptionalSignal<`m/${string}`> }) {
+	const sanitize = (input: string) => (input === '') ? '' : `m/${input.slice(2).replaceAll(/[^m\/\d']/g, '')}`
+	const serialize = (input: `m/${string}` | undefined) => input === undefined ? '' : input
+	const tryParse = (input: string) => ({ ok: true, value: /^m(?:\/\d+'?)+$/.test(input) ? input as `m/${string}` : undefined })
+	return <AutosizingInput value={maybeDerivationPath} sanitize={sanitize} serialize={serialize} tryParse={tryParse} type='text' pattern="^m(?:\/\d+'?)+$" placeholder="m/44'/60'/0'/0/0" dataList={[`m/44'/60'/0'/0/0`]}/>
 }

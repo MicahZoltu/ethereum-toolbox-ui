@@ -102,7 +102,7 @@ function PayDebtButton(model: PayDebtButtonModel) {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
 			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			await (await model.wallet.value.sendTransaction({
+			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH_REPAY_HELPER,
 				value: model.amountToRepay.value,
 				data: contract(CETH_REPAY_HELPER_ABI, microWeb3Provider, addressBigintToHex(CETH_REPAY_HELPER)).repayBehalfExplicit.encodeInput({ borrower: addressBigintToHex(model.debtorAddress.value), cEther_: addressBigintToHex(CETH) }),

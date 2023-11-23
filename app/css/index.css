@@ -1,7 +1,18 @@
+:root {
+	color-scheme: light dark;
+	--error-border: red;
+}
+
 *,
 *::before,
 *::after { 
 	box-sizing: border-box;
+}
+body {
+	display: flex;
+	flex-direction: column;
+	/* while centering looks nicer, since everything is sized responsively based on need it is better to have things extend/contract only on the right */
+	align-items: flex-start;
 }
 div {
 	display: flex;
@@ -36,12 +47,19 @@ code {
 	justify-content: center;
 	margin: 5px;
 	padding: 5px;
-	border: 1px solid black;
+	border: 1px solid;
 	/* tall enough to fit a button */
 	min-height: calc(1em + 17px);
 }
 .widget > div {
 	width: 100%;
+}
+
+.secret {
+	background-color: currentColor;
+}
+.secret:hover {
+	background-color: initial;
 }
 
 /* A custom font that renders both ● and • the same so password fields in different browsers render consistently despite using different placeholder glyphs. */

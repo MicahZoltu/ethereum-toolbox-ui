@@ -98,7 +98,7 @@ function BorrowButton(model: BorrowButtonModel) {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
 			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			await (await model.wallet.value.sendTransaction({
+			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH,
 				value: 0n,
 				data: contract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrow.encodeInput(model.borrowAmount.value),

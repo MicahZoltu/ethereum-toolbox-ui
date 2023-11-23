@@ -17,13 +17,19 @@ export const savedWindowWallets: ReadonlySignal<readonly bigint[]> = new Signal<
 export const rememberWindowWalletAddress = (address: bigint) => rememberAddress(windowWalletsStorageKey, savedWindowWallets, address)
 export const forgetWindowWalletAddress = (address: bigint) => forgetAddress(windowWalletsStorageKey, savedWindowWallets, address)
 
+const ledgerWalletsStorageKey = 'ledger-wallets'
+export const savedLedgerWallets: ReadonlySignal<readonly bigint[]> = new Signal<readonly bigint[]>(getAddresses(ledgerWalletsStorageKey))
+export const rememberLedgerWalletAddress = (address: bigint) => rememberAddress(ledgerWalletsStorageKey, savedLedgerWallets, address)
+export const forgetLedgerWalletAddress = (address: bigint) => forgetAddress(ledgerWalletsStorageKey, savedLedgerWallets, address)
+
 export const forgetWalletAddress = (address: bigint) => {
 	forgetContractWalletAddress(address)
 	forgetReadonlyWalletAddress(address)
 	forgetWindowWalletAddress(address)
+	forgetLedgerWalletAddress(address)
 }
 
-export const savedWallets = computed(() => [...savedContractWallets.value, ...savedReadonlyWallets.value, ...savedWindowWallets.value])
+export const savedWallets = computed(() => [...savedContractWallets.value, ...savedReadonlyWallets.value, ...savedWindowWallets.value, ...savedLedgerWallets.value])
 
 
 function getAddresses(storageKey: string) {

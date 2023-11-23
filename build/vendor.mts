@@ -21,6 +21,7 @@ const dependencyPaths = [
 	{ packageName: '@scure/bip32', subfolderToVendor: 'lib/esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: '@zoltu/bip39', subfolderToVendor: 'output', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'wordlists/english.js': 'wordlists/english.js' } },
 	{ packageName: '@zoltu/rlp-encoder', subfolderToVendor: 'output-esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: '@zoltu/ethereum-ledger', subfolderToVendor: 'output-es', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	{ packageName: '@zoltu/ethereum-transactions', subfolderToVendor: 'output', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'converters.js': 'converters.js' } },
 	{ packageName: 'micro-web3', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'api/uniswap-v3.js': 'api/uniswap-v3.js', 'contracts/index.js': 'contracts/index.js' } },
 	{ packageName: 'micro-packed', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
