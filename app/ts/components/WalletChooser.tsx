@@ -1,3 +1,4 @@
+import { utils as secp256k1Utils } from '@noble/secp256k1'
 import { ReadonlySignal, batch, useSignal, useSignalEffect } from '@preact/signals'
 import { HDKey } from '@scure/bip32'
 import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
@@ -331,8 +332,9 @@ function MnemonicOrKeyPrompt({ seed, privateKey }: { seed: OptionalSignal<Uint8A
 		const [ChangeButton_] = useState(() => () => <button onClick={reset} style={{ marginLeft: 'auto' }}>Change</button>)
 		const [Input_] = useState(() => () => <AutosizingInput type='password' autocomplete='off' placeholder='zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong' value={internalValue}/>)
 		const [NextButton_] = useState(() => () => <button onClick={onClick}>Next</button>)
+		const [RandomButton_] = useState(() => () => <button onClick={() => privateKey.deepValue = bytesToBigint(secp256k1Utils.randomPrivateKey())}>Random</button>)
 		switch (value.value.state) {
-			case 'inactive': return <><label>Mnemonic or Private Key<Input_/></label><NextButton_/></>
+			case 'inactive': return <><label>Mnemonic or Private Key<Input_/></label><RandomButton_/><NextButton_/></>
 			case 'pending': return <>Validating {internalValue.value}...<Spinner/></>
 			case 'rejected': return <><span style={{ color: 'red' }}>{value.value.error.message}</span><ChangeButton_/></>
 			case 'resolved': return <>{internalValue.value} <ChangeButton_/></>
