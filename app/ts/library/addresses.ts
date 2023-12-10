@@ -2,10 +2,15 @@ import { ReadonlySignal, Signal, computed } from "@preact/signals"
 import { isArray } from "./typescript.js"
 import { jsonParse, jsonStringify } from "./utilities.js"
 
-const contractWalletsStorageKey = 'contract-wallets'
-export const savedContractWallets: ReadonlySignal<readonly bigint[]> = new Signal<readonly bigint[]>(getAddresses(contractWalletsStorageKey))
-export const rememberContractWalletAddress = (address: bigint) => rememberAddress(contractWalletsStorageKey, savedContractWallets, address)
-export const forgetContractWalletAddress = (address: bigint) => forgetAddress(contractWalletsStorageKey, savedContractWallets, address)
+const recoverableWalletsStorageKey = 'recoverable-wallets'
+export const savedRecoverableWallets: ReadonlySignal<readonly bigint[]> = new Signal<readonly bigint[]>(getAddresses(recoverableWalletsStorageKey))
+export const rememberRecoverableWalletAddress = (address: bigint) => rememberAddress(recoverableWalletsStorageKey, savedRecoverableWallets, address)
+export const forgetRecoverableWalletAddress = (address: bigint) => forgetAddress(recoverableWalletsStorageKey, savedRecoverableWallets, address)
+
+const safeWalletsStorageKey = 'safe-wallets'
+export const savedSafeWallets: ReadonlySignal<readonly bigint[]> = new Signal<readonly bigint[]>(getAddresses(safeWalletsStorageKey))
+export const rememberSafeWalletAddress = (address: bigint) => rememberAddress(safeWalletsStorageKey, savedSafeWallets, address)
+export const forgetSafeWalletAddress = (address: bigint) => forgetAddress(safeWalletsStorageKey, savedSafeWallets, address)
 
 const readonlyWalletsStorageKey = 'readonly-wallets'
 export const savedReadonlyWallets: ReadonlySignal<readonly bigint[]> = new Signal<readonly bigint[]>(getAddresses(readonlyWalletsStorageKey))
@@ -23,13 +28,14 @@ export const rememberLedgerWalletAddress = (address: bigint) => rememberAddress(
 export const forgetLedgerWalletAddress = (address: bigint) => forgetAddress(ledgerWalletsStorageKey, savedLedgerWallets, address)
 
 export const forgetWalletAddress = (address: bigint) => {
-	forgetContractWalletAddress(address)
+	forgetRecoverableWalletAddress(address)
+	forgetSafeWalletAddress(address)
 	forgetReadonlyWalletAddress(address)
 	forgetWindowWalletAddress(address)
 	forgetLedgerWalletAddress(address)
 }
 
-export const savedWallets = computed(() => [...savedContractWallets.value, ...savedReadonlyWallets.value, ...savedWindowWallets.value, ...savedLedgerWallets.value])
+export const savedWallets = computed(() => [...savedRecoverableWallets.value, ...savedSafeWallets.value, ...savedReadonlyWallets.value, ...savedWindowWallets.value, ...savedLedgerWallets.value])
 
 
 function getAddresses(storageKey: string) {
