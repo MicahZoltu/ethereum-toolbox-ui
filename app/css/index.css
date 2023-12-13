@@ -62,6 +62,18 @@ code {
 	background-color: initial;
 }
 
+.close-button {
+	border: unset;
+	padding: unset;
+	background: unset;
+	font-size: xx-small;
+	align-self: flex-start;
+}
+
+.error-text {
+	color: red;
+}
+
 /* A custom font that renders both ● and • the same so password fields in different browsers render consistently despite using different placeholder glyphs. */
 /* Fonts have to be included in root DOM, but they must be referenced in the appropriate root/shadow DOM.  😖 */
 @font-face {

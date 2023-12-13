@@ -1,5 +1,7 @@
 import { Signal, batch, useSignal } from '@preact/signals'
 import { useMemo } from 'preact/hooks'
+import { ensureError } from './utilities.js'
+
 export type Inactive = { state: 'inactive' }
 export type Pending = { state: 'pending' }
 export type Resolved<T> = { state: 'resolved', value: T }
@@ -31,8 +33,7 @@ export function useAsyncState<T>(): AsyncState<T> {
 			const resolvedState = { state: 'resolved' as const, value: resolvedValue }
 			setCapturedResult(resolvedState)
 		} catch (unknownError: unknown) {
-			const error = unknownError instanceof Error ? unknownError : typeof unknownError === 'string' ? new Error(unknownError) : new Error(`Unknown error occurred.\n${JSON.stringify(unknownError)}`)
-			const rejectedState = { state: 'rejected' as const, error }
+			const rejectedState = { state: 'rejected' as const, error: ensureError(unknownError) }
 			setCapturedResult(rejectedState)
 		}
 	}

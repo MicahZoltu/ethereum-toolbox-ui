@@ -5,11 +5,12 @@ import { ERC20, WETH, WETH_CONTRACT } from 'micro-web3/contracts/index.js'
 import { useState } from 'preact/hooks'
 import { JSX } from 'preact/jsx-runtime'
 import { savedWallets } from '../library/addresses.js'
+import { QUOTER_ABI, ROUTER_ABI, UNISWAP_QUOTER_ADDRESS, UNISWAP_ROUTER_ADDRESS } from '../library/contract-details.js'
 import { Wallet, toMicroWeb3 } from '../library/ethereum.js'
 import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
 import { AssetDetails, ETH_DETAILS, WETH_DETAILS } from '../library/tokens.js'
 import { ResolvePromise } from '../library/typescript.js'
-import { jsonStringify } from '../library/utilities.js'
+import { errorAsString } from '../library/utilities.js'
 import { EthTransactionReceiptResult } from '../library/wire-types.js'
 import { AddressPicker } from './AddressPicker.js'
 import { Refresh } from './Refresh.js'
@@ -17,164 +18,11 @@ import { Spacer } from './Spacer.js'
 import { Spinner } from './Spinner.js'
 import { TokenAndAmount } from './TokenAndAmount.js'
 
-const ROUTER_ADDRESS = 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45n
-const ROUTER_ABI = [
-	{
-		"name":"exactInputSingle",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs": [
-			{
-				"components": [
-					{"internalType":"address","name":"tokenIn","type":"address"},
-					{"internalType":"address","name":"tokenOut","type":"address"},
-					{"internalType":"uint24","name":"fee","type":"uint24"},
-					{"internalType":"address","name":"recipient","type":"address"},
-					{"internalType":"uint256","name":"amountIn","type":"uint256"},
-					{"internalType":"uint256","name":"amountOutMinimum","type":"uint256"},
-					{"internalType":"uint160","name":"sqrtPriceLimitX96","type":"uint160"},
-				],
-				"internalType":"struct IV3SwapRouter.ExactInputSingleParams",
-				"name":"params",
-				"type":"tuple",
-			},
-		],
-		"outputs": [
-			{"internalType":"uint256","name":"amountOut","type":"uint256"},
-		],
-	},
-	{
-		"name":"exactOutputSingle",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs": [
-			{
-				"components": [
-					{"internalType":"address","name":"tokenIn","type":"address"},
-					{"internalType":"address","name":"tokenOut","type":"address"},
-					{"internalType":"uint24","name":"fee","type":"uint24"},
-					{"internalType":"address","name":"recipient","type":"address"},
-					{"internalType":"uint256","name":"amountOut","type":"uint256"},
-					{"internalType":"uint256","name":"amountInMaximum","type":"uint256"},
-					{"internalType":"uint160","name":"sqrtPriceLimitX96","type":"uint160"},
-				],
-				"internalType":"struct IV3SwapRouter.ExactOutputSingleParams",
-				"name":"params",
-				"type":"tuple",
-			},
-		],
-		"outputs": [
-			{"internalType":"uint256","name":"amountIn","type":"uint256"},
-		],
-	},
-	{
-		"name":"wrapETH",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs": [
-			{"internalType":"uint256","name":"value","type":"uint256"},
-		],
-		"outputs":[],
-	},
-	{
-		"name":"refundETH",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs":[],
-		"outputs":[],
-	},
-	{
-		"name":"unwrapWETH9",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs": [
-			{"internalType":"uint256","name":"amountMinimum","type":"uint256"},
-			{"internalType":"address","name":"recipient","type":"address"},
-		],
-		"outputs":[],
-	},
-	{
-		"name":"sweepToken",
-		"type":"function",
-		"stateMutability":"payable",
-		"inputs": [
-			{"internalType":"address","name":"token","type":"address"},
-			{"internalType":"uint256","name":"amountMinimum","type":"uint256"},
-			{"internalType":"address","name":"recipient","type":"address"},
-		],
-		"outputs":[],
-	},
-	{
-		"type":"function",
-		"stateMutability":"payable",
-		"name":"multicall",
-		"inputs": [
-			{"internalType":"uint256","name":"deadline","type":"uint256"},
-			{"internalType":"bytes[]","name":"data","type":"bytes[]"},
-		],
-		"outputs": [
-			{"internalType":"bytes[]","name":"","type":"bytes[]"},
-		],
-	},
-] as const
-const QUOTER_ADDRESS = 0x61fFE014bA17989E743c5F6cB21bF9697530B21en
-const QUOTER_ABI = [
-	{
-		"inputs": [
-			{
-				"components": [
-					{ "internalType": "address", "name": "tokenIn", "type": "address" },
-					{ "internalType": "address", "name": "tokenOut", "type": "address" },
-					{ "internalType": "uint256", "name": "amount", "type": "uint256" },
-					{ "internalType": "uint24", "name": "fee", "type": "uint24" },
-					{ "internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160" }
-				],
-				"internalType": "struct IQuoterV2.QuoteExactOutputSingleParams",
-				"name": "params",
-				"type": "tuple"
-			}
-		],
-		"name": "quoteExactOutputSingle",
-		"outputs": [
-			{ "internalType": "uint256", "name": "amountIn", "type": "uint256" },
-			{ "internalType": "uint160", "name": "sqrtPriceX96After", "type": "uint160" },
-			{ "internalType": "uint32", "name": "initializedTicksCrossed", "type": "uint32" },
-			{ "internalType": "uint256", "name": "gasEstimate", "type": "uint256" }
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"components": [
-					{ "internalType": "address", "name": "tokenIn", "type": "address" },
-					{ "internalType": "address", "name": "tokenOut", "type": "address" },
-					{ "internalType": "uint256", "name": "amountIn", "type": "uint256" },
-					{ "internalType": "uint24", "name": "fee", "type": "uint24" },
-					{ "internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160" }
-				],
-				"internalType": "struct IQuoterV2.QuoteExactInputSingleParams",
-				"name": "params",
-				"type": "tuple"
-			}
-		],
-		"name": "quoteExactInputSingle",
-		"outputs": [
-			{ "internalType": "uint256", "name": "amountOut", "type": "uint256" },
-			{ "internalType": "uint160", "name": "sqrtPriceX96After", "type": "uint160" },
-			{ "internalType": "uint32", "name": "initializedTicksCrossed", "type": "uint32" },
-			{ "internalType": "uint256", "name": "gasEstimate", "type": "uint256" }
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	}
-] as const
-
 type Route = { userSpecifiedValue: 'source' | 'target', source: AssetDetails, target: AssetDetails, amountIn: bigint, amountOut: bigint, fee: bigint }
 
 export type SwapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
+	readonly noticeError: (error: unknown) => unknown
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -212,7 +60,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 					return { amountOut: amountIn, fee: 0n }
 				}
 				const swapAndSend = async () => {
-					const quoteExactInputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(QUOTER_ADDRESS)).quoteExactInputSingle.call
+					const quoteExactInputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactInputSingle.call
 					const arrayOfObjectsWithPromises = [
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 500n, amountIn, sqrtPriceLimitX96: 0n }), fee: 500n },
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 3000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 3000n },
@@ -236,10 +84,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 					targetAmount.deepValue = amountOut
 				})
 			} catch (caught) {
-				error.deepValue =
-					(typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string') ? caught.message
-					: (typeof caught === 'string') ? caught
-					: jsonStringify(error, '\t')
+				error.deepValue = errorAsString(caught)
 				targetAmount.clear()
 				route.clear()
 			}
@@ -264,7 +109,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 				
 				const transferOrWrap = () => ({ amountIn: amountOut, fee: 0n })
 				const swapAndSend = async () => {
-					const quoteExactOutputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(QUOTER_ADDRESS)).quoteExactOutputSingle.call
+					const quoteExactOutputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactOutputSingle.call
 					const arrayOfObjectsWithPromises = [
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 500n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 500n },
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 3000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 3000n },
@@ -287,10 +132,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 					targetAmount.deepValue = amountOut
 				})
 			} catch (caught) {
-				error.deepValue =
-					(typeof caught === 'object' && caught !== null && 'message' in caught && typeof caught.message === 'string') ? caught.message
-					: (typeof caught === 'string') ? caught
-					: jsonStringify(error, '\t')
+				error.deepValue = errorAsString(caught)
 				sourceAmount.clear()
 				route.clear()
 			}
@@ -309,7 +151,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 		const [TokenAndAmount_] = useState(() => () => <TokenAndAmount key='target' assetDetails={targetTokenSignal} amount={targetAmount} onAmountChange={targetAmountChanged} onTokenChange={() => userSpecifiedValue.deepPeek() === 'target' ? targetAmountChanged() : sourceAmountChanged()}/>)
 		return <><Refresh_/><TokenAndAmount_/></>
 	})
-	const [SwapButton_] = useState(() => () => <SwapButton wallet={model.wallet} route={route} recipient={recipient} userSpecifiedValue={userSpecifiedValue} sourceToken={sourceTokenSignal} targetToken={targetTokenSignal} sourceAmount={sourceAmount} targetAmount={targetAmount} error={error}/>)
+	const [SwapButton_] = useState(() => () => <SwapButton wallet={model.wallet} route={route} recipient={recipient} userSpecifiedValue={userSpecifiedValue} sourceToken={sourceTokenSignal} targetToken={targetTokenSignal} sourceAmount={sourceAmount} targetAmount={targetAmount} noticeError={model.noticeError}/>)
 	const [Recipient_] = useState(() => () => <AddressPicker required address={recipient} extraOptions={[model.wallet.value.address, ...savedWallets.value]}/>)
 	return <div style={model.style} class={model.class}>
 		<div>Send <SourceToken_/> to <Recipient_/> as <TargetToken_/><Spacer/><SwapButton_/></div>
@@ -326,7 +168,7 @@ type SwapButtonModel = {
 	readonly targetToken: Signal<AssetDetails>
 	readonly sourceAmount: OptionalSignal<bigint>
 	readonly targetAmount: OptionalSignal<bigint>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 }
 function SwapButton(model: SwapButtonModel) {
 	if (model.wallet.value.readonly) return <></>
@@ -342,11 +184,10 @@ function SwapButton(model: SwapButtonModel) {
 
 	const { value: sendResult, waitFor: waitForSend, reset: _resetSend } = useAsyncState<EthTransactionReceiptResult>()
 	// propogate errors up the chain for rendering in some error rendering system
-	useSignalEffect(() => { sendResult.value.state === 'rejected' && (model.error.deepValue = sendResult.value.error.message) })
+	useSignalEffect(() => { sendResult.value.state === 'rejected' && model.noticeError(sendResult.value.error) })
 
 	const onClick = () => {
 		waitForSend(async () => {
-			model.error.clear()
 			// in an abundance of caution, validate UI matches route once again and capture variables so nothing can change out from under us mid-processing
 			const wallet = model.wallet.value
 			const route = model.route.deepValue
@@ -367,7 +208,7 @@ function SwapButton(model: SwapButtonModel) {
 			const recipientString = addressBigintToHex(recipient)
 
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(ROUTER_ADDRESS))
+			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_ROUTER_ADDRESS))
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
 			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
 			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
@@ -416,7 +257,7 @@ function SwapButton(model: SwapButtonModel) {
 				]
 				const transaction = router.multicall.encodeInput({ deadline, data: transactions })
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
-					to: ROUTER_ADDRESS,
+					to: UNISWAP_ROUTER_ADDRESS,
 					value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
 					data: transaction,
 				})
