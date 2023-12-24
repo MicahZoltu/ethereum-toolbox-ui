@@ -154,7 +154,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 	const [SwapButton_] = useState(() => () => <SwapButton wallet={model.wallet} route={route} recipient={recipient} userSpecifiedValue={userSpecifiedValue} sourceToken={sourceTokenSignal} targetToken={targetTokenSignal} sourceAmount={sourceAmount} targetAmount={targetAmount} noticeError={model.noticeError}/>)
 	const [Recipient_] = useState(() => () => <AddressPicker required address={recipient} extraOptions={[model.wallet.value.address, ...savedWallets.value]}/>)
 	return <div style={model.style} class={model.class}>
-		<div>Send <SourceToken_/> to <Recipient_/> as <TargetToken_/><Spacer/><SwapButton_/></div>
+		<span>Send <SourceToken_/> to <Recipient_/> as <TargetToken_/><Spacer/><SwapButton_/></span>
 		{error.value !== undefined && <div style={{ color: 'red' }}>{error.value}</div>}
 	</div>
 }

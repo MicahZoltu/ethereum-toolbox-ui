@@ -17,6 +17,7 @@ label {
 	align-items: center;
 	justify-content: center;
 	position: relative;
+	column-gap: 0.25em;
 }
 label {
 	min-width: 100%;

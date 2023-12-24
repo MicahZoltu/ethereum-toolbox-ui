@@ -31,8 +31,11 @@ export function Apps(model: { wallet: ReadonlySignal<Wallet>, noticeError: (erro
 	return <>
 		<Balances wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 		<SwapAndSend wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
-		<CompoundBorrow wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
-		<CompoundRepay wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
+		<div class='widget'>
+			<h1>Compound</h1>
+			<CompoundBorrow wallet={model.wallet} noticeError={model.noticeError} class='subwidget'/>
+			<CompoundRepay wallet={model.wallet} noticeError={model.noticeError} class='subwidget'/>
+		</div>
 		<GnosisSafe wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 	</>
 }

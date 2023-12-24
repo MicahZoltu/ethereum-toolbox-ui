@@ -1,5 +1,8 @@
 export const GNOSIS_SAFE_PROXY_FACTORY_ADDRESS = 0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2n
 export const GNOSIS_SAFE_MASTER_ADDRESS = 0xd9Db270c1B5E3Bd161E8c8503c55cEABeE709552n
+export const GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS = 0xd54895B1121A2eE3f37b502F507631FA1331BED6n
+export const GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS = 0x000000000000addb49795b0f9ba5bc298cdda236n
+export const MULTISEND_CALL_ADDRESS = 0x40a2accbd92bca938b02010e17a5b8929b49130dn
 export const UNISWAP_ROUTER_ADDRESS = 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45n
 export const UNISWAP_QUOTER_ADDRESS = 0x61fFE014bA17989E743c5F6cB21bF9697530B21en
 
@@ -123,7 +126,7 @@ export const GNOSIS_SAFE_PROXY_FACTORY_ABI = [
 	}
 ] as const
 
-export const GNOSIS_SAFE_MASTER_ABI = [
+export const GNOSIS_SAFE_ABI = [
 	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
@@ -607,6 +610,466 @@ export const GNOSIS_SAFE_MASTER_ABI = [
 	{
 		"stateMutability": "payable",
 		"type": "receive"
+	}
+] as const
+
+export const GNOSIS_SAFE_DELAY_MODULE_ABI = [
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_owner", "type": "address" },
+			{ "internalType": "address", "name": "_avatar", "type": "address" },
+			{ "internalType": "address", "name": "_target", "type": "address" },
+			{ "internalType": "uint256", "name": "_cooldown", "type": "uint256" },
+			{ "internalType": "uint256", "name": "_expiration", "type": "uint256" }
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "address", "name": "previousAvatar", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "newAvatar", "type": "address" }
+		],
+		"name": "AvatarSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": false, "internalType": "address", "name": "guard", "type": "address" }
+		],
+		"name": "ChangedGuard",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "address", "name": "initiator", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "avatar", "type": "address" },
+			{ "indexed": false, "internalType": "address", "name": "target", "type": "address" }
+		],
+		"name": "DelaySetup",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": false, "internalType": "address", "name": "module", "type": "address" }
+		],
+		"name": "DisabledModule",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": false, "internalType": "address", "name": "module", "type": "address" }
+		],
+		"name": "EnabledModule",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "address", "name": "previousTarget", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "newTarget", "type": "address" }
+		],
+		"name": "TargetSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "uint256", "name": "queueNonce", "type": "uint256" },
+			{ "indexed": true, "internalType": "bytes32", "name": "txHash", "type": "bytes32" },
+			{ "indexed": false, "internalType": "address", "name": "to", "type": "address" },
+			{ "indexed": false, "internalType": "uint256", "name": "value", "type": "uint256" },
+			{ "indexed": false, "internalType": "bytes", "name": "data", "type": "bytes" },
+			{ "indexed": false, "internalType": "enum Enum.Operation", "name": "operation", "type": "uint8" }
+		],
+		"name": "TransactionAdded",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "avatar",
+		"outputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "prevModule", "type": "address" },
+			{ "internalType": "address", "name": "module", "type": "address" }
+		],
+		"name": "disableModule",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "module", "type": "address" }
+		],
+		"name": "enableModule",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "to", "type": "address" },
+			{ "internalType": "uint256", "name": "value", "type": "uint256" },
+			{ "internalType": "bytes", "name": "data", "type": "bytes" },
+			{ "internalType": "enum Enum.Operation", "name": "operation", "type": "uint8" }
+		],
+		"name": "execTransactionFromModule",
+		"outputs": [
+			{ "internalType": "bool", "name": "success", "type": "bool" }
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "to", "type": "address" },
+			{ "internalType": "uint256", "name": "value", "type": "uint256" },
+			{ "internalType": "bytes", "name": "data", "type": "bytes" },
+			{ "internalType": "enum Enum.Operation", "name": "operation", "type": "uint8" }
+		],
+		"name": "execTransactionFromModuleReturnData",
+		"outputs": [
+			{ "internalType": "bool", "name": "success", "type": "bool" },
+			{ "internalType": "bytes", "name": "returnData", "type": "bytes" }
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "to", "type": "address" },
+			{ "internalType": "uint256", "name": "value", "type": "uint256" },
+			{ "internalType": "bytes", "name": "data", "type": "bytes" },
+			{ "internalType": "enum Enum.Operation", "name": "operation", "type": "uint8" }
+		],
+		"name": "executeNextTx",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getGuard",
+		"outputs": [
+			{ "internalType": "address", "name": "_guard", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "start", "type": "address" },
+			{ "internalType": "uint256", "name": "pageSize", "type": "uint256" }
+		],
+		"name": "getModulesPaginated",
+		"outputs": [
+			{ "internalType": "address[]", "name": "array", "type": "address[]" },
+			{ "internalType": "address", "name": "next", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "to", "type": "address" },
+			{ "internalType": "uint256", "name": "value", "type": "uint256" },
+			{ "internalType": "bytes", "name": "data", "type": "bytes" },
+			{ "internalType": "enum Enum.Operation", "name": "operation", "type": "uint8" }
+		],
+		"name": "getTransactionHash",
+		"outputs": [
+			{ "internalType": "bytes32", "name": "", "type": "bytes32" }
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "_nonce", "type": "uint256" }
+		],
+		"name": "getTxCreatedAt",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "_nonce", "type": "uint256" }
+		],
+		"name": "getTxHash",
+		"outputs": [
+			{ "internalType": "bytes32", "name": "", "type": "bytes32" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "guard",
+		"outputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_module", "type": "address" }
+		],
+		"name": "isModuleEnabled",
+		"outputs": [
+			{ "internalType": "bool", "name": "", "type": "bool" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "queueNonce",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_avatar", "type": "address" }
+		],
+		"name": "setAvatar",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_guard", "type": "address" }
+		],
+		"name": "setGuard",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "_target", "type": "address" }
+		],
+		"name": "setTarget",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "cooldown", "type": "uint256" }
+		],
+		"name": "setTxCooldown",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "expiration", "type": "uint256" }
+		],
+		"name": "setTxExpiration",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "_nonce", "type": "uint256" }
+		],
+		"name": "setTxNonce",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "bytes", "name": "initParams", "type": "bytes" }
+		],
+		"name": "setUp",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "skipExpired",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "target",
+		"outputs": [
+			{ "internalType": "address", "name": "", "type": "address" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "newOwner", "type": "address" }
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "txCooldown",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"name": "txCreatedAt",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "txExpiration",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"name": "txHash",
+		"outputs": [
+			{ "internalType": "bytes32", "name": "", "type": "bytes32" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "txNonce",
+		"outputs": [
+			{ "internalType": "uint256", "name": "", "type": "uint256" }
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+] as const
+
+export const GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI = [
+	{
+		"inputs": [],
+		"name": "FailedInitialization",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "address_", "type": "address" }
+		],
+		"name": "TakenAddress",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "target", "type": "address" }
+		],
+		"name": "TargetHasNoCode",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "target", "type": "address" }
+		],
+		"name": "ZeroAddress",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{ "indexed": true, "internalType": "address", "name": "proxy", "type": "address" },
+			{ "indexed": true, "internalType": "address", "name": "masterCopy", "type": "address" }
+		],
+		"name": "ModuleProxyCreation",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{ "internalType": "address", "name": "masterCopy", "type": "address" },
+			{ "internalType": "bytes", "name": "initializer", "type": "bytes" },
+			{ "internalType": "uint256", "name": "saltNonce", "type": "uint256" }
+		],
+		"name": "deployModule",
+		"outputs": [
+			{ "internalType": "address", "name": "proxy", "type": "address" }
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+] as const
+
+export const MULTISEND_CALL_ABI = [
+	{
+		"inputs":[
+			{ "internalType": "bytes", "name": "transactions", "type": "bytes" }
+		],
+		"name": "multiSend",
+		"outputs": [],
+		"stateMutability": "payable", "type": "function"
 	}
 ] as const
 

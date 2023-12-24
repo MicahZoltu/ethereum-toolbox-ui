@@ -10,6 +10,7 @@ import { bigintToDecimalString } from "../library/utilities.js"
 import { AddressPicker } from "./AddressPicker.js"
 import { FixedPointInput } from "./FixedPointInput.js"
 import { Refresh } from "./Refresh.js"
+import { Spacer } from "./Spacer.js"
 import { Spinner } from "./Spinner.js"
 
 const CETH_REPAY_HELPER = 0xf859A1AD94BcF445A406B892eF0d3082f4174088n
@@ -46,10 +47,10 @@ export function CompoundRepay(model: CompoundRepayModel) {
 			if (amountToRepay === undefined) return <></>
 			return <PayDebtButton wallet={model.wallet} debtorAddress={borrower} amountToRepay={amountToRepay} noticeError={model.noticeError} sendComplete={reset}/>
 		})
-		return <>(<Debt_/>) up to <RepaymentAmount_/> <Submit_/></>
+		return <><span style={{ gap: 0 }}>(<Debt_/>)</span> up to <RepaymentAmount_/><Spacer/><Submit_/></>
 	})
 	return <div style={model.style} class={model.class}>
-		<div>Repay debt of <BorrowerSelector_/> <Suffix_/></div>
+		<span>Repay debt of <BorrowerSelector_/><Suffix_/></span>
 	</div>
 }
 

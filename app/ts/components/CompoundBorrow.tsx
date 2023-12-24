@@ -41,7 +41,7 @@ export function CompoundBorrow(model: CompoundBorrowModel) {
 	const [BorrowButton_] = useState(() => () => borrowAmount.value === undefined ? <></> : <BorrowButton wallet={model.wallet} borrowAmount={borrowAmount.value} noticeError={model.noticeError} sendComplete={reset}/>)
 
 	return <div style={model.style} class={model.class}>
-		<div>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH)<Spacer/><BorrowButton_/></div>
+		<span>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH)<Spacer/><BorrowButton_/></span>
 	</div>
 }
 

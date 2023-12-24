@@ -27,22 +27,23 @@ export interface WalletChooserModel {
 export function WalletChooser(model: WalletChooserModel) {
 	const walletType = useSignal<'readonly' | 'memory' | 'window' | 'recoverable' | 'safe' | 'ledger'>('readonly')
 	useSignalEffect(() => walletType.value && model.wallet.clear())
-	const [WalletBuilder_] = useState(() => () => {
+	const [WalletBuilder_] = useState(() => ({style}: {style?: JSX.CSSProperties}) => {
 		switch (walletType.value) {
-			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
-			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
-			case 'window': return <WindowWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
-			case 'recoverable': return <RecoverableWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
-			case 'safe': return <SafeWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
-			case 'ledger': return <LedgerWalletBuilder wallet={model.wallet} noticeError={model.noticeError}/>
+			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
+			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
+			case 'window': return <WindowWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
+			case 'recoverable': return <RecoverableWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
+			case 'safe': return <SafeWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
+			case 'ledger': return <LedgerWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
 		}
 	})
-	return <div style={model.style} class={model.class}>
-		<div><Select options={['readonly', 'memory', 'window', 'recoverable', 'safe', 'ledger']} selected={walletType} /><WalletBuilder_/></div>
+	return <div id='wallet-chooser' style={model.style} class={model.class}>
+		<Select options={['readonly', 'memory', 'window', 'recoverable', 'safe', 'ledger']} selected={walletType} />
+		<WalletBuilder_ style={{ width: '100%' }}/>
 	</div>
 }
 
-function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const maybeEthereumClient = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -70,7 +71,7 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 				return <button onClick={() => rememberWindowWalletAddress(address)} style={{width:'100%'}}>Remember</button>
 			}
 		})
-		return <div style={{ flexGrow: 1 }}>
+		return <div id='readonly-builder' style={model.style}>
 			<div style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
 				<Rpc_/>
 				<Address_/>
@@ -83,7 +84,7 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 	}
 }
 
-function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -107,7 +108,7 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 	const [ContractAddress_] = useState(() => () => {
 		return (maybeAddress.deepValue === undefined)
 			? <AddressPicker required address={maybeAddress} extraOptions={savedRecoverableWallets}/>
-			: <>Contract:<code>{addressBigintToHex(maybeAddress.deepValue)}</code></>
+			: <span>Contract:<code>{addressBigintToHex(maybeAddress.deepValue)}</code></span>
 	})
 	const [OwnerAddress_] = useState(() => () => {
 		const { value, waitFor } = useAsyncState<bigint>()
@@ -129,9 +130,9 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 		}
 	})
 	const [SignerWallet_] = useState(() => () => {
-		return <div style={{ flexDirection: 'column', border: '1px dashed blue', padding: '3px' }}>
+		return <div class='subwidget' style={{ width: '100%' }}>
 			<div>Signer:</div>
-			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError}/>
+			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError} class='subwidget' style={{ width: '100%' }}/>
 		</div>
 	})
 	const [RememberButton_] = useState(()=> () => {
@@ -144,27 +145,25 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 		}
 	})
 	const [ContractWallet_] = useState(() => () => {
-		return <div style={{ flexDirection: 'column', border: '1px dashed blue', padding: '3px' }}>
-			<div>Recoverable Wallet:</div>
-			<div>
-				<div style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-					<div><ContractAddress_/></div>
-					<div><OwnerAddress_/></div>
-				</div>
-				<div style={{ flexDirection: 'column' }}>
-					<ChangeButton_/>
-					<RememberButton_/>
-				</div>
+		return <div class='subwidget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+			<div style={{ flexDirection: 'column', flexGrow: 1, alignItems: 'flex-start' }}>
+				<span>Recoverable Wallet:</span>
+				<span><ContractAddress_/></span>
+				<span><OwnerAddress_/></span>
+			</div>
+			<div style={{ flexDirection: 'column' }}>
+				<ChangeButton_/>
+				<RememberButton_/>
 			</div>
 		</div>
 	})
-	return <div style={{ flexGrow: 1, alignItems: 'normal' }}>
+	return <div id='recoverable-builder' style={{ ...model.style, flexDirection: 'column' }}>
 		<ContractWallet_/>
 		<SignerWallet_/>
 	</div>
 }
 
-function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -188,12 +187,12 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 	const [ContractAddress_] = useState(() => () => {
 		return (maybeAddress.deepValue === undefined)
 			? <AddressPicker required address={maybeAddress} extraOptions={savedSafeWallets}/>
-			: <>Contract:<code>{addressBigintToHex(maybeAddress.deepValue)}</code></>
+			: <>Contract: <code>{addressBigintToHex(maybeAddress.deepValue)}</code></>
 	})
 	const [SignerWallet_] = useState(() => () => {
-		return <div style={{ flexDirection: 'column', border: '1px dashed blue', padding: '3px' }}>
-			<div>Signer:</div>
-			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError}/>
+		return <div class='subwidget' style={{ width: '100%' }}>
+			<span>Signer:</span>
+			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError} class='subwidget' style={{ width: '100%' }}/>
 		</div>
 	})
 	const [RememberButton_] = useState(()=> () => {
@@ -206,26 +205,24 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 		}
 	})
 	const [ContractWallet_] = useState(() => () => {
-		return <div style={{ flexDirection: 'column', border: '1px dashed blue', padding: '3px' }}>
-			<div>Gnosis SAFE Wallet:</div>
-			<div>
-				<div style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-					<div style={{ width: '100%' }}><ContractAddress_/></div>
-				</div>
-				<div style={{ flexDirection: 'column' }}>
-					<ChangeButton_/>
-					<RememberButton_/>
-				</div>
+		return <div class='subwidget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+			<div style={{ flexDirection: 'column', flexGrow: 1, alignItems: 'flex-start' }}>
+				<span>Gnosis SAFE Wallet:</span>
+				<span><ContractAddress_/></span>
+			</div>
+			<div style={{ flexDirection: 'column' }}>
+				<ChangeButton_/>
+				<RememberButton_/>
 			</div>
 		</div>
 	})
-	return <div style={{ flexGrow: 1, alignItems: 'normal' }}>
+	return <div id='safe-builder' style={{ ...model.style, flexDirection: 'column' }}>
 		<ContractWallet_/>
 		<SignerWallet_/>
 	</div>
 }
 
-function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const ethereumClientSignal = useOptionalSignal(EthereumClientWindow.tryCreate())
 	const ethereumClient = ethereumClientSignal.deepValue
 	if (!ethereumClient) return <>No browser wallet detected.</>
@@ -262,19 +259,17 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 		switch (asyncAddress.value.state) {
 			case 'inactive': return <>Unexpected state, please report bug to developer.</>
 			case 'pending': return <>Loading accounts... <Spinner/></>
-			case 'resolved': return asyncAddress.value.value !== undefined ? <>Address:<code>{addressBigintToHex(asyncAddress.value.value)}</code></> : <>No accounts provided by browser wallet.</>
+			case 'resolved': return asyncAddress.value.value !== undefined ? <span>Address: <code>{addressBigintToHex(asyncAddress.value.value)}</code></span> : <>No accounts provided by browser wallet.</>
 			case 'rejected': return <>Error while retrieving accounts from browser wallet: {asyncAddress.value.error.message}</>
 		}
 	})
-	return <div style={{ flexGrow: 1 }}>
-		<div style={{ flexGrow: '1', alignItems: 'flex-start' }}>
-			<Address_/><Refresh onClick={requestAccounts}/>
-		</div>
+	return <div id='window-builder' style={model.style}>
+		<span style={{ flexGrow: 1 }}><Address_/> <Refresh onClick={requestAccounts}/></span>
 		<RememberButton_/>
 	</div>
 }
 
-function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
 	const { value: asyncWalletBuild, waitFor: waitForWalletBuild } = useAsyncState()
@@ -322,7 +317,7 @@ function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	} else if (asyncWalletBuild.value.state === 'pending') {
 		return <Spinner/>
 	} else {
-		return <div id='ledger-builder' style={{ flexGrow: 1 }}>
+		return <div id='ledger-builder' style={model.style}>
 			<div style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
 				<Address_/>
 			</div>
@@ -334,7 +329,7 @@ function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	}
 }
 
-function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeEthereumClientMemory = useOptionalSignal<EthereumClientMemory>(undefined)
 	const maybePrivateKey = useOptionalSignal<bigint>(undefined)
@@ -357,7 +352,7 @@ function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	} else if (maybePrivateKey.value === undefined) {
 		return <KeySelector privateKey={maybePrivateKey} noticeError={model.noticeError}/>
 	} else {
-		return <div style={{ flexGrow: 1 }}>Address:<code>{addressBigintToHex(getAddressFromPrivateKey(maybePrivateKey.value.value))}</code>Private Key:<code class='secret'>{bigintToHex(maybePrivateKey.value.value, 32)}</code><ChangeAccountButton_/></div>
+		return <div id='memory-builder' style={model.style}><span>Address:<code>{addressBigintToHex(getAddressFromPrivateKey(maybePrivateKey.value.value))}</code></span><span>Private Key:<code class='secret'>{bigintToHex(maybePrivateKey.value.value, 32)}</code></span><ChangeAccountButton_/></div>
 	}
 }
 
@@ -418,11 +413,7 @@ function DerivationPathPrompt({ seed, privateKey}: { seed: ReadonlySignal<Uint8A
 		privateKey.deepValue = bytesToBigint(maybePrivateKey)
 	}
 	return <div style={{ flexGrow: 1 }}>
-		<label>
-			Derivation Path&thinsp;
-			<DerivationPathPicker value={maybeDerivationPath}/>
-		</label>
-		&thinsp;
+		<label>Derivation Path <DerivationPathPicker value={maybeDerivationPath}/></label>
 		<button onClick={onClick} style={{ marginLeft: 'auto' }}>Next</button>
 	</div>
 }

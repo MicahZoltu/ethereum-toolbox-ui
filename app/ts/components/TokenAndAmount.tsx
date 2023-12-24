@@ -24,7 +24,6 @@ export function TokenAndAmount(model: TokenAndAmountModel) {
 
 	return <span>
 		<FixedPointInput autoSize required placeholder='1.23' value={model.amount} decimals={decimals} onChange={onAmountChanged}/>
-		&nbsp;
 		<TokenSelector selectedToken={model.assetDetails} onChange={onTokenChange}/>
 	</span>
 }

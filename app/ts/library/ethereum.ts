@@ -2,7 +2,7 @@ import { signTransaction as signTransactionWithLedger } from '@zoltu/ethereum-le
 import { encodeTransaction, signTransaction as signTransactionWithKey } from '@zoltu/ethereum-transactions'
 import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
 import { contract } from 'micro-web3'
-import { GNOSIS_SAFE_MASTER_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
+import { GNOSIS_SAFE_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
 import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
@@ -204,7 +204,7 @@ export class EthereumClientRecoverable extends EthereumClient {
 }
 
 export class EthereumClientSafe extends EthereumClient {
-	private readonly walletContract = contract(GNOSIS_SAFE_MASTER_ABI, toMicroWeb3(this))
+	private readonly walletContract = contract(GNOSIS_SAFE_ABI, toMicroWeb3(this))
 
 	public constructor(
 		private readonly underlyingClient: IEthereumClient,
@@ -251,7 +251,8 @@ export class EthereumClientSafe extends EthereumClient {
 		const to = addressBigintToHex(innerTransaction.to)
 		const value = innerTransaction.value || 0n
 		const data = innerTransaction.data || new Uint8Array(0)
-		const operation = 0n
+		const operation = 'operation' in innerTransaction && innerTransaction.operation === 'DELEGATECALL' ? 1n : 0n
+		// TODO: app.safe.global fills in safeTxGas even if it doesn't need to, need to mirror to avoid fingerprinting app usage
 		const safeTxGas = 0n
 		const baseGas = 0n
 		const gasPrice = 0n
