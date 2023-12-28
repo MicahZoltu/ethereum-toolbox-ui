@@ -1,34 +1,35 @@
 import { keccak_256 } from '@noble/hashes/sha3'
-import { ReadonlySignal, Signal, useSignalEffect } from "@preact/signals"
+import { ReadonlySignal, useSignalEffect } from "@preact/signals"
 import { addressBigintToHex, addressHexToBigint, bigintToBytes, bytesToBigint, hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
 import { contract } from "micro-web3"
 import { useEffect, useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
 import { savedSafeWallets } from '../library/addresses.js'
-import { GNOSIS_SAFE_ABI, GNOSIS_SAFE_DELAY_MODULE_ABI, GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS, MULTISEND_CALL_ABI, MULTISEND_CALL_ADDRESS } from "../library/contract-details.js"
+import { GNOSIS_SAFE_ABI, GNOSIS_SAFE_DELAY_MODULE_ABI, GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS, GNOSIS_SAFE_FALLBACK_HANDLER_ADDRESS, GNOSIS_SAFE_MASTER_ADDRESS, GNOSIS_SAFE_PROXY_FACTORY_ABI, GNOSIS_SAFE_PROXY_FACTORY_ADDRESS, MULTISEND_CALL_ABI, MULTISEND_CALL_ADDRESS } from "../library/contract-details.js"
 import { IEthereumClient, Wallet } from "../library/ethereum.js"
 import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { NarrowUnion, ResolvePromise } from "../library/typescript.js"
 import { AddressPicker } from "./AddressPicker.js"
 import { CloseButton } from "./CloseButton.js"
+import { Countdown } from './Countdown.js'
 import { IntegerInput } from './IntegerInput.js'
 import { Refresh } from "./Refresh.js"
 import { Spacer } from './Spacer.js'
 import { Spinner } from "./Spinner.js"
 
 // this is relatively expensive to instantiate and it is pure so we can just reuse this one instance
+const safeFactoryContract = contract(GNOSIS_SAFE_PROXY_FACTORY_ABI)
 const safeContract = contract(GNOSIS_SAFE_ABI)
 const multisendContract = contract(MULTISEND_CALL_ABI)
 const delayModuleContract = contract(GNOSIS_SAFE_DELAY_MODULE_ABI)
 const delayModuleProxyFactoryContract = contract(GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI)
 
-export type GnosisSafeModel = {
+export function GnosisSafe(model: {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly noticeError: (error: unknown) => unknown
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
-}
-export function GnosisSafe(model: GnosisSafeModel) {
+}) {
 	const maybeSafeAddress = useOptionalSignal<bigint>(undefined)
 	const [SafeSelector_] = useState(() => () => {
 		if (maybeSafeAddress.deepValue !== undefined) return <></>
@@ -49,29 +50,22 @@ export function GnosisSafe(model: GnosisSafeModel) {
 	</div>
 }
 
-export type CreateSafeModel = {
+export function CreateSafe(model: {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly createdSafeAddress: OptionalSignal<bigint>
 	readonly noticeError: (error: unknown) => unknown
-}
-export function CreateSafe(model: CreateSafeModel) {
+}) {
 	const { value, waitFor } = useAsyncState<bigint>()
 	useSignalEffect(() => {if (value.value.state === 'resolved') model.createdSafeAddress.deepValue = value.value.value })
-	function createSafe() {
-		waitFor(async () => {
-			// TODO
-			return 0n
-		})
-	}
+	const createSafe = () => waitFor(async () => await createAndInitializeSafe(model.wallet.value.ethereumClient, model.wallet.value.address))
 	return <span>Create a new Gnosis SAFE: <button onClick={createSafe}>Create</button></span>
 }
 
-export type SafeManagerModel = {
+export function SafeManager(model: {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly maybeSafeAddress: OptionalSignal<bigint>
 	readonly noticeError: (error: unknown) => unknown
-}
-export function SafeManager(model: SafeManagerModel) {
+}) {
 	const maybeSafeClient = useOptionalSignal<SafeClient>(undefined)
 
 	useSignalEffect(() => {
@@ -87,15 +81,11 @@ export function SafeManager(model: SafeManagerModel) {
 
 	if (model.maybeSafeAddress.deepValue === undefined) {
 		return <></>
-	} else if (maybeSafeClient.value === undefined || maybeSafeClient.deepValue === undefined) {
+	} else if (maybeSafeClient.value === undefined) {
 		return <Spinner/>
 	} else {
-		const [SafeRecovery_] = useState(() => (_: { safeClient: Signal<SafeClient> }) => {
-			return <></>
-		})
 		return <>
 			<span><span>Safe Address: <code>{addressBigintToHex(model.maybeSafeAddress.deepValue)}</code></span><Spacer/><ChangeSafeButton_/></span>
-			<SafeRecovery_ safeClient={maybeSafeClient.value}/>
 			<RecovererList ethereumClient={model.wallet.value.ethereumClient} safeClient={maybeSafeClient.value} noticeError={model.noticeError}/>
 			<Signers safeClient={maybeSafeClient.value} noticeError={model.noticeError}/>
 		</>
@@ -121,9 +111,31 @@ function RecovererList(model: {
 
 	const [Recoverers_] = useState(() => () => {
 		const [Recoverer_] = useState(() => ({recoverer}: {recoverer: DelayModuleClient}) => {
+			const remainingSeconds = useOptionalSignal<bigint>(undefined)
+			const { value: asyncRemainingSeconds, waitFor } = useAsyncState<bigint | undefined>({ onRejected: model.noticeError, onResolved: x => remainingSeconds.deepValue = x })
+			const refresh = () => waitFor(() => recoverer.getRemainingCooldown())
+			useEffect(refresh, [])
 			const [Address_] = useState(() => () => <code>{addressBigintToHex(recoverer.recovererAddress)}</code>)
-			const [RemoveRecovererButton_] = useState(() => () => <RemoveRecovererButton safeClient={model.safeClient} noticeError={model.noticeError} delayModuleAddress={recoverer.moduleAddress} refreshRecoverers={refresh}/>)
-			return <span><span>{Number(recoverer.cooldown * 100n / 60n / 60n / 24n) / 100} Days - <Address_/></span><RemoveRecovererButton_ /></span>
+			const [RemoveOrStartButton_] = useState(() => () => <>
+				<StartRecoveryButton delayModuleClient={recoverer} refreshRecoverers={refresh} noticeError={model.noticeError}/>
+				<RemoveRecovererButton safeClient={model.safeClient} delayModuleAddress={recoverer.moduleAddress} refreshRecoverers={refresh} noticeError={model.noticeError}/>
+			</>)
+			const [MaybeRecoveryInitiated_] = useState(() => () => {
+				switch (asyncRemainingSeconds.value.state) {
+					case 'pending': return <Spinner/>
+					case 'inactive':
+					case 'rejected': return <span>⚠️<Refresh onClick={refresh}/></span>
+					case 'resolved': {
+						if (remainingSeconds.value === undefined) return <span style={{ fontSize: 'small', lineHeight: '1em' }}>↳ Recovery not initiated.<Refresh onClick={refresh}/></span>
+						// TODO: add button to execute recoverey if cooldown remaining is 0
+						else return <span>↳ ⚠️Recovery initiated!⚠️ <Countdown seconds={remainingSeconds.value}/> remaining until account is recovered.</span>
+					}
+				}
+			})
+			return <div style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+				<span><span>{Number(recoverer.cooldown * 100n / 60n / 60n / 24n) / 100} Days - <Address_/></span><RemoveOrStartButton_ /></span>
+				<MaybeRecoveryInitiated_/>
+			</div>
 		})
 		const [AddRecoverer_] = useState(() => () => {
 			const safeClient = model.safeClient.value
@@ -255,6 +267,46 @@ function RemoveRecovererButton(model: {
 	}
 }
 
+function StartRecoveryButton(model: {
+	readonly delayModuleClient: DelayModuleClient
+	readonly refreshRecoverers: () => unknown
+	readonly noticeError: (error: unknown) => unknown
+}) {
+	const delayModuleClient = model.delayModuleClient 
+	if (!delayModuleClient.owned) return <></>
+	const { value, waitFor } = useAsyncState({ onRejected: model.noticeError, onResolved: model.refreshRecoverers })
+	const startRecovery = () => waitFor(async () => { await delayModuleClient.queueRecovery() })
+	switch (value.value.state) {
+		case 'inactive':
+		case 'rejected': return <button onClick={startRecovery}>Start Recovery</button>
+		case 'pending': return <Spinner/>
+		case 'resolved': return <></>
+	}
+}
+
+async function createAndInitializeSafe(ethereumClient: IEthereumClient, ownerAddress: bigint) {
+	const initializer = safeContract.setup.encodeInput({
+		_owners: [addressBigintToHex(ownerAddress)],
+		_threshold: 1n,
+		to: addressBigintToHex(0n),
+		data: new Uint8Array(0),
+		fallbackHandler: addressBigintToHex(GNOSIS_SAFE_FALLBACK_HANDLER_ADDRESS),
+		paymentToken: addressBigintToHex(0n),
+		payment: 0n,
+		paymentReceiver: addressBigintToHex(0n),
+	})
+	const result = await ethereumClient.sendTransaction({
+		to: GNOSIS_SAFE_PROXY_FACTORY_ADDRESS,
+		data: safeFactoryContract.createProxyWithNonce.encodeInput({ _singleton: addressBigintToHex(GNOSIS_SAFE_MASTER_ADDRESS), initializer, saltNonce: BigInt(Math.round(Date.now() / 1000)) }),
+	})
+	// event ProxyCreation(GnosisSafeProxy proxy, address singleton)
+	const receipt = await result.waitForReceipt()
+	const log = receipt.logs.find(log => log.address === GNOSIS_SAFE_PROXY_FACTORY_ADDRESS && log.topics[0] === 0x4f51faf6c4561ff95f067657e43439f0f856d97c04d9ec9070a6199ad418e235n && bytesToBigint(log.data.slice(0, 32)) !== 0n)
+	if (log === undefined) throw new Error(`Expected ProxyCreation event not found.`)
+	const safeAddress = bytesToBigint(log.data.slice(0, 32))
+	return safeAddress
+}
+
 async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, delayModuleAddress: bigint, safeAddress: bigint) {
 	//
 	// Read Functions
@@ -323,8 +375,9 @@ async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, delayMo
 			to: delayModuleAddress,
 			data: delayModuleContract.getTxCreatedAt.encodeInput(await getNonce())
 		}, 'latest')
-		const cooldown = await cooldownPromise
 		const queuedAt = delayModuleContract.getTxCreatedAt.decodeOutput(result)
+		if (queuedAt === 0n) return undefined
+		const cooldown = await cooldownPromise
 		const now = BigInt(Math.round(Date.now() / 1000))
 		const remaining = (queuedAt + cooldown) - now
 		return remaining > 0n ? remaining : 0n

@@ -251,9 +251,11 @@ export class EthereumClientSafe extends EthereumClient {
 		const to = addressBigintToHex(innerTransaction.to)
 		const value = innerTransaction.value || 0n
 		const data = innerTransaction.data || new Uint8Array(0)
+		// NOTE: `operation` isn't exposed as part of the 'innerTransaction' type, and doing so would be very complicated, so this is a hidden parameter for SAFEs only
 		const operation = 'operation' in innerTransaction && innerTransaction.operation === 'DELEGATECALL' ? 1n : 0n
-		// TODO: app.safe.global fills in safeTxGas even if it doesn't need to, need to mirror to avoid fingerprinting app usage
-		const safeTxGas = 0n
+		// app.safe.global fills in safeTxGas even if it doesn't need to, we mirror this behavior to avoid fingerprinting app usage, this is hard though because the revert data is exposed differently by each client
+		this.estiamteSafeGas // silence warnings about unused code for now, one day we should make this work in a cross-wallet way
+		const safeTxGas = 0n // await this.estiamteSafeGas(innerTransaction.to, value, data, operation)
 		const baseGas = 0n
 		const gasPrice = 0n
 		const gasToken = addressBigintToHex(0n)
@@ -267,6 +269,22 @@ export class EthereumClientSafe extends EthereumClient {
 		}
 		const gas = innerTransaction.gas ?? await this.underlyingClient.estimateGas(outerTransaction, 'latest')
 		return await this.underlyingClient.sendTransaction({ ...outerTransaction, gas })
+	}
+
+	private readonly estiamteSafeGas = async (to: bigint, value: bigint, data: Uint8Array, operation: bigint) => {
+		try {
+			await this.call({
+				to: this.address,
+				value: 0n,
+				data: this.walletContract.requiredTxGas.encodeInput({ to: addressBigintToHex(to), value, data, operation }),
+			}, 'latest')
+			return 0n
+		} catch (error: unknown) {
+			// NOTE: every client returns error data from eth_call differently, so we have to test against every client and wallet to find the full set of ways revert data may come through.
+			if (typeof error !== 'object' || error === null || Array.isArray(error) || !('message' in error) || !('data' in error) || typeof error.data !== 'string') throw error
+			const gasLimit = bytesToBigint(new TextEncoder().encode(error.data.slice('execution reverted: '.length)))
+			return gasLimit
+		}
 	}
 }
 
