@@ -115,8 +115,11 @@ export function SwapAndSend(model: SwapAndSendModel) {
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 3000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 3000n },
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 10000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 10000n },
 					]
-					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountIn: (await x.promise).amountIn * 10010n / 10000n, fee: x.fee }))
-					const arrayOfResults = await Promise.all(arrayOfPromises)
+					const arrayOfPromises: Promise<{ amountIn: bigint, fee: bigint }>[] = arrayOfObjectsWithPromises.map(async x => ({ amountIn: (await x.promise).amountIn * 10010n / 10000n, fee: x.fee }))
+					const arrayOfResults = (await Promise.allSettled(arrayOfPromises)).filter((x): x is PromiseFulfilledResult<{ amountIn: bigint, fee: bigint }> => x.status === 'fulfilled').map(x => x.value)
+					// if `arrayOfResults` is empty, it means all of the promises rejected, so just await them all normally and one of them will throw
+					if (arrayOfResults.length === 0) Promise.all(arrayOfResults)
+					// we have a null assertion here because in the case of an empty array we'll throw on the line above
 					return arrayOfResults.sort((a, b) => Number(a.amountIn - b.amountIn))[0]!
 				}
 				const { amountIn, fee } = (source === target || (source.symbol === 'ETH' && target.symbol === 'WETH') || (source.symbol === 'WETH' && target.symbol === 'ETH'))
