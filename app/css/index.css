@@ -16,15 +16,18 @@ body {
 }
 div {
 	display: flex;
+	align-items: center;
+	gap: 0.25em;
 }
 span,
 label {
 	display: inline-flex;
+	flex-direction: row;
+	align-items: center;
+	column-gap: 0.25em;
 }
 div, label, span {
 	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.25em;
 }
 
 main {
@@ -47,12 +50,33 @@ code {
 	justify-content: center;
 	margin: 5px;
 	padding: 5px;
-	border: 1px solid;
+	border: thin solid;
 	/* tall enough to fit a button */
 	min-height: calc(1em + 17px);
 }
 .widget > div {
 	width: 100%;
+}
+.widget h1 {
+	text-decoration: underline;
+	font-weight: 'bold';
+	font-size: inherit;
+	line-height: inherit;
+	padding: initial;
+	margin: initial;
+}
+.subwidget {
+	flex-direction: column;
+	align-items: flex-start;
+	border: thin dashed;
+	padding: 5px;
+}
+.subwidget h1 {
+	font-style: 'bold';
+	font-size: inherit;
+	line-height: inherit;
+	padding: initial;
+	margin: initial;
 }
 
 .secret {
@@ -60,6 +84,24 @@ code {
 }
 .secret:hover {
 	background-color: initial;
+}
+
+.close-button {
+	border: unset;
+	padding: unset;
+	font-size: xx-small;
+	align-self: flex-start;
+}
+
+span > .spinner {
+	align-self: flex-end;
+}
+span > code {
+	align-self: flex-end;
+}
+
+.error-text {
+	color: red;
 }
 
 /* A custom font that renders both ● and • the same so password fields in different browsers render consistently despite using different placeholder glyphs. */

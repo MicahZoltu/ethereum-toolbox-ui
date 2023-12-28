@@ -1,4 +1,4 @@
-import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from "@preact/signals"
+import { ReadonlySignal, Signal, useSignal, useSignalEffect } from "@preact/signals"
 import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
 import { contract } from "micro-web3"
 import { useState } from "preact/hooks"
@@ -23,6 +23,7 @@ const ORACLE = 0x50ce56A3239671Ab62f185704Caedf626352741en
 const ORACLE_ABI = [{"inputs":[{"internalType":"address","name":"cToken","type":"address"}],"name":"getUnderlyingPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}] as const
 export type CompoundBorrowModel = {
 	readonly wallet: ReadonlySignal<Wallet>
+	readonly noticeError: (error: unknown) => unknown
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -30,37 +31,28 @@ export function CompoundBorrow(model: CompoundBorrowModel) {
 	const borrowLimit = useOptionalSignal<bigint>(undefined)
 	const borrowAmount = useOptionalSignal<bigint>(undefined)
 	const decimals = useSignal<bigint>(18n)
-	const borrowLimitError = useOptionalSignal<string>(undefined)
-	const borrowError = useOptionalSignal<string>(undefined)
 
 	function reset() {
 		borrowAmount.value = undefined
 		borrowLimit.value = undefined
-		borrowLimitError.value = undefined
-		borrowError.value = undefined
 	}
 	const [BorrowAmount_] = useState(() => () => <FixedPointInput required autoSize value={borrowAmount} decimals={decimals}/>)
-	const [BorrowLimit_] = useState(() => () => <BorrowLimit wallet={model.wallet} borrowLimit={borrowLimit} error={borrowLimitError}/>)
-	const [BorrowButton_] = useState(() => () => borrowAmount.value === undefined ? <></> : <BorrowButton wallet={model.wallet} borrowAmount={borrowAmount.value} error={borrowError} sendComplete={reset}/>)
-	const [BorrowLimitError_] = useState(() => () => <>{borrowLimitError.value && <div style={{ color: 'red' }}>{borrowLimitError.value}</div>}</>)
-	const [BorrowError_] = useState(() => () => <>{borrowError.value && <div style={{ color: 'red' }}>{borrowError.value}</div>}</>)
+	const [BorrowLimit_] = useState(() => () => <BorrowLimit wallet={model.wallet} borrowLimit={borrowLimit} noticeError={model.noticeError}/>)
+	const [BorrowButton_] = useState(() => () => borrowAmount.value === undefined ? <></> : <BorrowButton wallet={model.wallet} borrowAmount={borrowAmount.value} noticeError={model.noticeError} sendComplete={reset}/>)
 
 	return <div style={model.style} class={model.class}>
-		<div>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH)<Spacer/><BorrowButton_/></div>
-		<BorrowLimitError_/>
-		<BorrowError_/>
+		<span>Borrow <BorrowAmount_/> ETH (Max: <BorrowLimit_/> ETH)<Spacer/><BorrowButton_/></span>
 	</div>
 }
 
 type BorrowLimitModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrowLimit: OptionalSignal<bigint>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 }
 function BorrowLimit(model: BorrowLimitModel) {
 	const { value: borrowLimit, waitFor: waitForBorrowLimit } = useAsyncState<bigint>()
 	function refresh() {
-		model.error.clear()
 		waitForBorrowLimit(async () => {
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			const comptroller = contract(COMPTROLLER_ABI, microWeb3Provider, addressBigintToHex(COMPTROLLER))
@@ -73,7 +65,7 @@ function BorrowLimit(model: BorrowLimitModel) {
 	}
 	useSignalEffect(() => { model.borrowLimit.value === undefined && refresh() })
 	useSignalEffect(() => { borrowLimit.value.state === 'resolved' && (model.borrowLimit.deepValue = borrowLimit.value.value) })
-	useSignalEffect(() => batch(() => { model.error.deepValue = borrowLimit.value.state === 'rejected' ? borrowLimit.value.error.message : undefined }))
+	useSignalEffect(() => { borrowLimit.value.state === 'rejected' && model.noticeError(borrowLimit.value.error) })
 	const [Refresh_] = useState(() => () => <Refresh onClick={refresh}/>)
 	switch (borrowLimit.value.state) {
 		case 'inactive': return <Refresh_/>
@@ -86,17 +78,16 @@ function BorrowLimit(model: BorrowLimitModel) {
 type BorrowButtonModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrowAmount: Signal<bigint>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 	readonly sendComplete: () => void
 }
 function BorrowButton(model: BorrowButtonModel) {
 	const { value: sendResult, waitFor: waitForSend } = useAsyncState<void>()
-	useSignalEffect(() => { model.error.deepValue = sendResult.value.state === 'rejected' ? sendResult.value.error.message : undefined })
+	useSignalEffect(() => { sendResult.value.state === 'rejected' && model.noticeError(sendResult.value.error) })
 	useSignalEffect(() => { sendResult.value.state === 'resolved' && model.sendComplete() })
 	function submit() {
 		waitForSend(async () => {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
-			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH,

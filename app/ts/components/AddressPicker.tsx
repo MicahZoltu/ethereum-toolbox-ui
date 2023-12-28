@@ -13,7 +13,12 @@ export interface AddressPickerModel {
 	readonly required?: boolean | JSX.SignalLike<boolean>
 }
 export function AddressPicker(model: AddressPickerModel) {
-	const sanitize = (maybeAddress: string) => maybeAddress === '' ? '' : `0x${maybeAddress.slice(2).replaceAll(sanitizationRegexp, '')}`
+	const sanitize = (maybeAddress: string) => {
+		if (maybeAddress === '') return ''
+		if (maybeAddress.startsWith('eth:0x')) maybeAddress = maybeAddress.slice(6)
+		if (maybeAddress.startsWith('0x')) maybeAddress = maybeAddress.slice(2)
+		return `0x${maybeAddress.replaceAll(sanitizationRegexp, '')}`
+	}
 	const tryParse = (input: string) => ({ ok: true, value: isAddressRegexp.test(input) ? BigInt(input) : undefined } as const)
 	const serialize = (input: bigint | undefined) => input === undefined ? '' : addressBigintToHex(input)
 	const extraOptions = ((model.extraOptions instanceof Signal ? model.extraOptions.value : model.extraOptions) || []).map(x => x instanceof Signal ? x.value : x)

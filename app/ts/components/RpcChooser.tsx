@@ -9,7 +9,7 @@ import { Spacer } from "./Spacer.js";
 
 export interface RpcChooserModel {
 	readonly ethereumClient: OptionalSignal<IEthereumClient>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 	readonly class?: JSX.HTMLAttributes['class']
 	readonly style?: JSX.CSSProperties
 }
@@ -18,7 +18,7 @@ export function RpcChooser(model: RpcChooserModel) {
 		const { value: url, waitFor: urlWaitFor, reset: resetValidity } = useAsyncState<string>()
 		const existingProvider = model.ethereumClient.deepPeek()
 
-		useSignalEffect(() => { url.value.state === 'rejected' && (model.error.deepValue = `${internalValue.peek() || 'http://localhost:8545'} is not a valid Ethereum JSON-RPC server:\n${url.value.error.message}`) })
+		useSignalEffect(() => { url.value.state === 'rejected' && model.noticeError(new Error(`${internalValue.peek() || 'http://localhost:8545'} is not a valid Ethereum JSON-RPC server:\n${url.value.error.message}`)) })
 
 		// try to use the existing provider's endpoint (if it exists)
 		if (existingProvider && 'endpoint' in existingProvider && typeof existingProvider.endpoint === 'string') {
@@ -27,7 +27,6 @@ export function RpcChooser(model: RpcChooserModel) {
 		const internalValue = useSignal((existingProvider as {endpoint: string} | undefined)?.endpoint || '')
 		function testUrl() {
 			urlWaitFor(async () => {
-				model.error.clear()
 				const url = internalValue.value || 'http://localhost:8545'
 				if (!url.startsWith('http://') && !url.startsWith('https://')) throw new Error(`JSON-RPC URL must start with http:// or https://\n${url}`)
 				const response = await fetch(url, { method: 'POST', body: '{ "jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[] }' })

@@ -1,7 +1,8 @@
+import { signTransaction as signTransactionWithLedger } from '@zoltu/ethereum-ledger'
 import { encodeTransaction, signTransaction as signTransactionWithKey } from '@zoltu/ethereum-transactions'
 import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
-import { signTransaction as signTransactionWithLedger } from '@zoltu/ethereum-ledger'
 import { contract } from 'micro-web3'
+import { GNOSIS_SAFE_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
 import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
@@ -139,44 +140,8 @@ export class EthereumClientJsonRpc extends EthereumClient {
 	}
 }
 
-export class EthereumClientContract extends EthereumClient {
-	private readonly walletContract = contract([
-		{
-			"name": "execute",
-			"type": "function",
-			"stateMutability": "payable",
-			"inputs": [
-				{"internalType": "address payable","name": "_to","type": "address"},
-				{"internalType": "uint256","name": "_value","type": "uint256"},
-				{"internalType": "bytes","name": "_data","type": "bytes"}
-			],
-			"outputs": [
-				{"internalType": "bytes","name": "","type": "bytes"}
-			],
-		},
-		{
-			"name": "deploy",
-			"type": "function",
-			"stateMutability": "payable",
-			"inputs": [
-				{"internalType": "uint256","name": "_value","type": "uint256"},
-				{"internalType": "bytes","name": "_data","type": "bytes"},
-				{"internalType": "uint256","name": "_salt","type": "uint256"}
-			],
-			"outputs": [
-				{"internalType": "address","name": "","type": "address"}
-			],
-		},
-		{
-			"name": "owner",
-			"type": "function",
-			"stateMutability": "view",
-			"inputs": [],
-			"outputs": [
-				{"internalType": "address","name": "","type": "address"}
-			],
-		},
-	] as const, toMicroWeb3(this))
+export class EthereumClientRecoverable extends EthereumClient {
+	private readonly walletContract = contract(RECOVERABLE_WALLET_ABI, toMicroWeb3(this))
 
 	public constructor(
 		private readonly underlyingClient: IEthereumClient,
@@ -235,6 +200,91 @@ export class EthereumClientContract extends EthereumClient {
 			data: this.walletContract.owner.encodeInput({})
 		}, 'latest')
 		return bytesToBigint(result)
+	}
+}
+
+export class EthereumClientSafe extends EthereumClient {
+	private readonly walletContract = contract(GNOSIS_SAFE_ABI, toMicroWeb3(this))
+
+	public constructor(
+		private readonly underlyingClient: IEthereumClient,
+		private readonly underlyingAddress: bigint,
+		public override readonly address: bigint,
+	) {
+		super()
+		// TODO: make sure underlynig address matches owner
+		// TODO: make sure this is a SAFE wallet during construction
+		// TODO: make sure threshold is 1
+		this.underlyingAddress
+	}
+
+	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
+
+	public override readonly call = async (...[transaction, blockTag]: EthCallParameters): ReturnType<EthereumClient['call']> => {
+		if (transaction.to === null) throw new Error(`Contract deployment not supported for Gnosis SAFE wallets.`)
+		const result = await this.underlyingClient.call({ ...transaction, from: this.address }, blockTag)
+		return result
+	}
+
+	public override readonly estimateGas = async (...[transaction, blockTag]: EthEstimateGasParameters): ReturnType<EthereumClient['estimateGas']> => {
+		if (transaction.to === null) throw new Error(`Contract deployment not supported for Gnosis SAFE wallets.`)
+		const to = addressBigintToHex(transaction.to)
+		const value = transaction.value || 0n
+		const data = transaction.data || new Uint8Array(0)
+		const operation = 0n
+		const safeTxGas = 0n
+		const baseGas = 0n
+		const gasPrice = 0n
+		const gasToken = addressBigintToHex(0n)
+		const refundReceiver = addressBigintToHex(0n)
+		const signatures = hexToBytes(`0x000000000000000000000000${this.underlyingAddress.toString(16).padStart(40,'0')}000000000000000000000000000000000000000000000000000000000000000001`)
+		return await this.underlyingClient.estimateGas({
+			...transaction,
+			to: this.address,
+			value: 0n,
+			data: this.walletContract.execTransaction.encodeInput({ to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures })
+		}, blockTag)
+	}
+
+	public override readonly sendTransaction = async (...[innerTransaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
+		if (innerTransaction.to === null) throw new Error(`Contract deployment not supported for Gnosis SAFE wallets.`)
+		const to = addressBigintToHex(innerTransaction.to)
+		const value = innerTransaction.value || 0n
+		const data = innerTransaction.data || new Uint8Array(0)
+		// NOTE: `operation` isn't exposed as part of the 'innerTransaction' type, and doing so would be very complicated, so this is a hidden parameter for SAFEs only
+		const operation = 'operation' in innerTransaction && innerTransaction.operation === 'DELEGATECALL' ? 1n : 0n
+		// app.safe.global fills in safeTxGas even if it doesn't need to, we mirror this behavior to avoid fingerprinting app usage, this is hard though because the revert data is exposed differently by each client
+		this.estiamteSafeGas // silence warnings about unused code for now, one day we should make this work in a cross-wallet way
+		const safeTxGas = 0n // await this.estiamteSafeGas(innerTransaction.to, value, data, operation)
+		const baseGas = 0n
+		const gasPrice = 0n
+		const gasToken = addressBigintToHex(0n)
+		const refundReceiver = addressBigintToHex(0n)
+		const signatures = hexToBytes(`0x000000000000000000000000${this.underlyingAddress.toString(16).padStart(40,'0')}000000000000000000000000000000000000000000000000000000000000000001`)
+		const outerTransaction = {
+			...innerTransaction,
+			to: this.address,
+			value: 0n,
+			data: this.walletContract.execTransaction.encodeInput({ to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures })
+		}
+		const gas = innerTransaction.gas ?? await this.underlyingClient.estimateGas(outerTransaction, 'latest')
+		return await this.underlyingClient.sendTransaction({ ...outerTransaction, gas })
+	}
+
+	private readonly estiamteSafeGas = async (to: bigint, value: bigint, data: Uint8Array, operation: bigint) => {
+		try {
+			await this.call({
+				to: this.address,
+				value: 0n,
+				data: this.walletContract.requiredTxGas.encodeInput({ to: addressBigintToHex(to), value, data, operation }),
+			}, 'latest')
+			return 0n
+		} catch (error: unknown) {
+			// NOTE: every client returns error data from eth_call differently, so we have to test against every client and wallet to find the full set of ways revert data may come through.
+			if (typeof error !== 'object' || error === null || Array.isArray(error) || !('message' in error) || !('data' in error) || typeof error.data !== 'string') throw error
+			const gasLimit = bytesToBigint(new TextEncoder().encode(error.data.slice('execution reverted: '.length)))
+			return gasLimit
+		}
 	}
 }
 

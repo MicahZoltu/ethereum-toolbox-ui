@@ -14,6 +14,7 @@ import { Spinner } from "./Spinner.js"
 
 export type BalancesModel = {
 	readonly wallet: ReadonlySignal<Wallet>
+	readonly noticeError: (error: unknown) => unknown
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -29,12 +30,13 @@ export function Balances(model: BalancesModel) {
 			}
 		})
 		useSignalEffect(refresh)
+		useSignalEffect(() => { value.value.state === 'rejected' && model.noticeError(value.value.error) })
 		const [Refresh_] = useState(() => () => <Refresh onClick={refresh}/>)
 		const [RemoveTokenButton_] = useState(() => () => (typeof address === 'bigint' && symbol !== 'WETH') ? <button onClick={() => removeToken({symbol, address, decimals})} style={{ padding: '0px', border: '0px', background: 'none', alignSelf: 'flex-start', fontSize: 'x-small' }}>x</button> : <></>)
 		switch (value.value.state) {
 			case 'inactive': return <div>{symbol}: <Refresh_/></div>
 			case 'pending': return <div>{symbol}: <Spinner/></div>
-			case 'rejected': return <div>{symbol}: Erorr fetching balance: {value.value.error.message}<Refresh_/></div>
+			case 'rejected': return <div>{symbol}: Erorr fetching balance: <span class='error-text'>{value.value.error.message}</span><Refresh_/></div>
 			case 'resolved': return <div>{symbol}<RemoveTokenButton_/>: {bigintToDecimalString(value.value.value, decimals)}<Refresh_/></div>
 		}
 	})
@@ -55,11 +57,12 @@ export function Balances(model: BalancesModel) {
 				return details
 			})
 		})
+		useSignalEffect(() => { value.value.state === 'rejected' && model.noticeError(value.value.error) })
 		const [AddAnotherButton_] = useState(() => () => <button onClick={reset}>Add Another</button>)
 		switch (value.value.state) {
 			case 'inactive': return <span>Add Token: <AddressPicker address={maybeAddress}/></span>
 			case 'pending': return <Spinner/>
-			case 'rejected': return <span>Error: <span style={{color: 'red'}}>{value.value.error.message}</span><AddAnotherButton_/></span>
+			case 'rejected': return <span>Error: <span class='error-text'>{value.value.error.message}</span><AddAnotherButton_/></span>
 			case 'resolved': return <span style={{ color: 'darkgreen'}}>Added {value.value.value.symbol} with address {addressBigintToHex(value.value.value.address)} and {value.value.value.decimals} decimals.<AddAnotherButton_/></span>
 		}
 	})

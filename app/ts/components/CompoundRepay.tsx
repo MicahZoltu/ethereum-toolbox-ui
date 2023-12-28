@@ -10,6 +10,7 @@ import { bigintToDecimalString } from "../library/utilities.js"
 import { AddressPicker } from "./AddressPicker.js"
 import { FixedPointInput } from "./FixedPointInput.js"
 import { Refresh } from "./Refresh.js"
+import { Spacer } from "./Spacer.js"
 import { Spinner } from "./Spinner.js"
 
 const CETH_REPAY_HELPER = 0xf859A1AD94BcF445A406B892eF0d3082f4174088n
@@ -19,6 +20,7 @@ const CETH_ABI = [{"constant":false,"inputs":[{"name":"account","type":"address"
 
 export type CompoundRepayModel = {
 	readonly wallet: ReadonlySignal<Wallet>
+	readonly noticeError: (error: unknown) => unknown
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -27,36 +29,28 @@ export function CompoundRepay(model: CompoundRepayModel) {
 	const maybeDebtInAttoeth = useOptionalSignal<bigint>(undefined)
 	const maybeAmountToRepay = useOptionalSignal<bigint>(undefined)
 	const decimals = useSignal(18n)
-	const debtError = useOptionalSignal<string>(undefined)
-	const submitError = useOptionalSignal<string>(undefined)
 	
 	function reset() {
 		maybeBorrower.clear()
 		maybeDebtInAttoeth.clear()
 		maybeAmountToRepay.clear()
-		debtError.clear()
-		submitError.clear()
 	}
 
 	const [BorrowerSelector_] = useState(() => () => <AddressPicker required address={maybeBorrower} extraOptions={[model.wallet.value.address, ...savedWallets.value]}/>)
 	const [Suffix_] = useState(() => () => {
 		const borrower = maybeBorrower.value
 		if (borrower === undefined) return <></>
-		const [Debt_] = useState(() => () => <CompoundDebt wallet={model.wallet} borrower={borrower} debtInAttoeth={maybeDebtInAttoeth} error={debtError}/>)
+		const [Debt_] = useState(() => () => <CompoundDebt wallet={model.wallet} borrower={borrower} debtInAttoeth={maybeDebtInAttoeth} noticeError={model.noticeError}/>)
 		const [RepaymentAmount_] = useState(() => () => <FixedPointInput required autoSize value={maybeAmountToRepay} decimals={decimals}/>)
 		const [Submit_] = useState(() => () => {
 			const amountToRepay = maybeAmountToRepay.value
 			if (amountToRepay === undefined) return <></>
-			return <PayDebtButton wallet={model.wallet} debtorAddress={borrower} amountToRepay={amountToRepay} error={submitError} sendComplete={reset}/>
+			return <PayDebtButton wallet={model.wallet} debtorAddress={borrower} amountToRepay={amountToRepay} noticeError={model.noticeError} sendComplete={reset}/>
 		})
-		return <>(<Debt_/>) up to <RepaymentAmount_/> <Submit_/></>
+		return <><span style={{ gap: 0 }}>(<Debt_/>)</span> up to <RepaymentAmount_/><Spacer/><Submit_/></>
 	})
-	const [DebtQueryError_] = useState(() => () => <>{debtError.deepValue && <div style={{ color: 'red' }}>{debtError.deepValue}</div>}</>)
-	const [SubmitError_] = useState(() => () => <>{submitError.deepValue && <div style={{ color: 'red' }}>{submitError.deepValue}</div>}</>)
 	return <div style={model.style} class={model.class}>
-		<div>Repay debt of <BorrowerSelector_/> <Suffix_/></div>
-		<DebtQueryError_/>
-		<SubmitError_/>
+		<span>Repay debt of <BorrowerSelector_/><Suffix_/></span>
 	</div>
 }
 
@@ -64,19 +58,18 @@ type CompoundDebt = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrower: Signal<bigint>
 	readonly debtInAttoeth: OptionalSignal<bigint>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 }
 function CompoundDebt(model: CompoundDebt) {
 	const { value: debtAmount, waitFor: waitForDebtAmount } = useAsyncState<bigint>()
 	function refresh() {
-		model.error.clear()
 		const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 		waitForDebtAmount(async () => await contract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrowBalanceCurrent.call(addressBigintToHex(model.borrower.peek())))
 	}
 	useSignalEffect(refresh)
 	useSignalEffect(() => { model.debtInAttoeth.value === undefined && refresh() })
 	useSignalEffect(() => { model.debtInAttoeth.deepValue = debtAmount.value.state === 'resolved' ? debtAmount.value.value : undefined })
-	useSignalEffect(() => { model.error.deepValue = debtAmount.value.state === 'rejected' ? debtAmount.value.error.message : undefined })
+	useSignalEffect(() => { debtAmount.value.state === 'rejected' && model.noticeError(debtAmount.value.error) })
 	const [Refresh_] = useState(() => () => <Refresh onClick={refresh}/>)
 	switch (debtAmount.value.state) {
 		case 'inactive': return <Refresh_/>
@@ -90,17 +83,16 @@ type PayDebtButtonModel = {
 	readonly wallet: Signal<Wallet>
 	readonly debtorAddress: ReadonlySignal<bigint>
 	readonly amountToRepay: ReadonlySignal<bigint>
-	readonly error: OptionalSignal<string>
+	readonly noticeError: (error: unknown) => unknown
 	readonly sendComplete: () => void
 }
 function PayDebtButton(model: PayDebtButtonModel) {
 	const { value: sendResult, waitFor: waitForSend } = useAsyncState()
-	useSignalEffect(() => { model.error.deepValue = sendResult.value.state === 'rejected' ? sendResult.value.error.message : undefined })
+	useSignalEffect(() => { sendResult.value.state === 'rejected' && model.noticeError(sendResult.value.error) })
 	useSignalEffect(() => { sendResult.value.state === 'resolved' && model.sendComplete() })
 	function submit() {
 		waitForSend(async () => {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
-			model.error.clear()
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH_REPAY_HELPER,
