@@ -1,21 +1,35 @@
-import { Signal, batch, useSignal } from '@preact/signals'
+import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from '@preact/signals'
 import { useMemo } from 'preact/hooks'
 import { ensureError } from './utilities.js'
 
 export type Inactive = { state: 'inactive' }
 export type Pending = { state: 'pending' }
-export type Resolved<T> = { state: 'resolved', value: T }
+export type Resolved<T> = { state: 'resolved', value: T, signal: Signal<T> }
 export type Rejected = { state: 'rejected', error: Error }
 export type AsyncProperty<T> = Inactive | Pending | Resolved<T> | Rejected
-export type AsyncState<T> = { value: Signal<AsyncProperty<T>>, waitFor: (resolver: () => Promise<T>) => void, reset: () => void }
+export type AsyncState<T> = {
+	value: ReadonlySignal<AsyncProperty<T>>,
+	waitFor: (resolver: () => Promise<T>) => void,
+	reset: () => void,
+	onInactive: (callback: () => unknown) => AsyncState<T>
+	onPending: (callback: () => unknown) => AsyncState<T>
+	onResolved: (callback: (value: T) => unknown) => AsyncState<T>
+	onRejected: (callback: (error: Error) => unknown) => AsyncState<T>
+}
 export type Callbacks<T> = {
 	onInactive?: () => unknown
 	onPending?: () => unknown
-	onResolved?: (value?: T) => unknown
+	onResolved?: (value: T) => unknown
 	onRejected?: (error: Error) => unknown
 }
 
-export function useAsyncState<T>(callbacks?: Callbacks<T>): AsyncState<T> {
+export function useAsyncState<T>(): AsyncState<T> {
+	let onInactive: (() => unknown) | undefined = undefined
+	let onPending: (() => unknown) | undefined = undefined
+	let onRejected: ((error: Error) => unknown) | undefined = undefined
+	let onResolved: ((value: T) => unknown) | undefined = undefined
+
+	const innerSignal = useOptionalSignal<T>(undefined)
 	function getCaptureAndCancelOthers() {
 		// delete previously captured signal so any pending async work will no-op when they resolve
 		delete captureContainer.peek().result
@@ -35,16 +49,17 @@ export function useAsyncState<T>(callbacks?: Callbacks<T>): AsyncState<T> {
 		try {
 			const pendingState = { state: 'pending' as const }
 			setCapturedResult(pendingState)
-			callbacks?.onPending && callbacks.onPending()
+			onPending && onPending()
 			const resolvedValue = await resolver()
-			const resolvedState = { state: 'resolved' as const, value: resolvedValue }
+			innerSignal.deepValue = resolvedValue
+			const resolvedState = { state: 'resolved' as const, value: resolvedValue, signal: innerSignal.value! }
 			setCapturedResult(resolvedState)
-			callbacks?.onResolved && callbacks.onResolved(resolvedValue)
+			onResolved && onResolved(resolvedValue)
 		} catch (unknownError: unknown) {
 			const error = ensureError(unknownError)
 			const rejectedState = { state: 'rejected' as const, error }
 			setCapturedResult(rejectedState)
-			callbacks?.onRejected && callbacks.onRejected(error)
+			onRejected && onRejected(error)
 		}
 	}
 
@@ -52,45 +67,53 @@ export function useAsyncState<T>(callbacks?: Callbacks<T>): AsyncState<T> {
 		const result = getCaptureAndCancelOthers().result
 		if (result === undefined) return
 		result.value = { state: 'inactive' }
-		callbacks?.onInactive && callbacks.onInactive()
+		onInactive && onInactive()
 	}
 
 	const result = useSignal<AsyncProperty<T>>({ state: 'inactive' })
 	const captureContainer = useSignal<{ result?: Signal<AsyncProperty<T>> }>({})
 
-	return { value: result, waitFor: resolver => activate(resolver), reset }
+	const asyncState: AsyncState<T> = {
+		value: result,
+		waitFor: resolver => activate(resolver),
+		reset,
+		onInactive: callback => { onInactive = callback; return asyncState },
+		onPending: callback => { onPending = callback; return asyncState },
+		onRejected: callback => { onRejected = callback; return asyncState },
+		onResolved: callback => { onResolved = callback; return asyncState },
+	}
+	return asyncState
 }
 
-export class OptionalSignal<T> extends Signal<Signal<T> | undefined> {
+/**
+ * @param compute Async function.  Any signals you want tracked must have their .value read *before* the first await of the function.
+ * @param callbacks Optional callbacks to be called when various states are reached.  These are called after the signal value is updated.
+ * @returns
+ */
+export function useAsyncComputed<T>(compute: () => Promise<T>, callbacks?: Callbacks<T>): ReadonlySignal<Pending | Resolved<T> | Rejected> {
+	const { value, waitFor, onInactive, onPending, onRejected, onResolved } = useAsyncState<T>()
+	if (callbacks?.onInactive) onInactive(callbacks.onInactive)
+	if (callbacks?.onPending) onPending(callbacks.onPending)
+	if (callbacks?.onRejected) onRejected(callbacks.onRejected)
+	if (callbacks?.onResolved) onResolved(callbacks.onResolved)
+	useSignalEffect(() => waitFor(compute))
+	// we strip off the `inactive` here because `reset` isn't exposed externally and we have moved into the `pending` state already by this point, so 'inactive' is unreachable
+	return value as ReadonlySignal<Pending | Resolved<T> | Rejected>
+}
+
+export class OptionalSignal<T> extends Signal<Signal<T> | undefined> implements ReadonlySignal<Signal<T> | undefined> {
 	private inner: Signal<T> | undefined
 
 	public constructor(value: Signal<T> | T | undefined, startUndefined?: boolean) {
-		if (value === undefined) {
-			super(undefined)
-		} else if (value instanceof Signal) {
-			super(startUndefined ? undefined : value)
-			this.inner = value
-		} else {
-			const inner = new Signal(value)
-			super(startUndefined ? undefined : inner)
-			this.inner = inner
-		}
+		super(value === undefined || startUndefined === true ? undefined : value instanceof Signal ? value : new Signal(value))
+		this.set.bind(this)
+		if (this.value instanceof Signal) this.inner = this.value
 	}
 
-	public clear() {
-		this.value = undefined
-	}
-	
 	public get deepValue() {
 		const inner = this.value
 		if (inner === undefined) return undefined
 		else return inner.value
-	}
-
-	public deepPeek() {
-		const inner = this.peek()
-		if (inner === undefined) return undefined
-		else return inner.peek()
 	}
 
 	public set deepValue(newValue: T | undefined) {
@@ -104,6 +127,17 @@ export class OptionalSignal<T> extends Signal<Signal<T> | undefined> {
 			})
 		}
 	}
+
+	public readonly deepPeek = () => {
+		const inner = this.peek()
+		if (inner === undefined) return undefined
+		else return inner.peek()
+	}
+
+	public readonly clear = () => this.value = undefined
+	
+	// convenience function for when you want pass a setter to a function; note that this is `this` bound in the constructor
+	public set(newValue: T | undefined) { this.deepValue = newValue }
 }
 
 export function useOptionalSignal<T>(value: Signal<T> | T | undefined, startUndefined?: boolean) {
