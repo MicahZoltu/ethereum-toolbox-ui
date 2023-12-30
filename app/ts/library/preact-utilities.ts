@@ -1,5 +1,6 @@
 import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from '@preact/signals'
 import { useMemo } from 'preact/hooks'
+import { OmitUnion } from './typescript.js'
 import { ensureError } from './utilities.js'
 
 export type Inactive = { state: 'inactive' }
@@ -23,13 +24,12 @@ export type Callbacks<T> = {
 	onRejected?: (error: Error) => unknown
 }
 
-export function useAsyncState<T>(): AsyncState<T> {
+export function useAsyncState<T>(initialValue?: T): AsyncState<T> {
 	let onInactive: (() => unknown) | undefined = undefined
 	let onPending: (() => unknown) | undefined = undefined
 	let onRejected: ((error: Error) => unknown) | undefined = undefined
 	let onResolved: ((value: T) => unknown) | undefined = undefined
 
-	const innerSignal = useOptionalSignal<T>(undefined)
 	function getCaptureAndCancelOthers() {
 		// delete previously captured signal so any pending async work will no-op when they resolve
 		delete captureContainer.peek().result
@@ -70,7 +70,8 @@ export function useAsyncState<T>(): AsyncState<T> {
 		onInactive && onInactive()
 	}
 
-	const result = useSignal<AsyncProperty<T>>({ state: 'inactive' })
+	const innerSignal = useOptionalSignal<T>(initialValue === undefined ? undefined : initialValue)
+	const result = useSignal<AsyncProperty<T>>(initialValue === undefined ? { state: 'inactive' } : { state: 'resolved', value: innerSignal.deepValue!, signal: innerSignal.value! })
 	const captureContainer = useSignal<{ result?: Signal<AsyncProperty<T>> }>({})
 
 	const asyncState: AsyncState<T> = {
@@ -99,6 +100,28 @@ export function useAsyncComputed<T>(compute: () => Promise<T>, callbacks?: Callb
 	useSignalEffect(() => waitFor(compute))
 	// we strip off the `inactive` here because `reset` isn't exposed externally and we have moved into the `pending` state already by this point, so 'inactive' is unreachable
 	return value as ReadonlySignal<Pending | Resolved<T> | Rejected>
+}
+
+export type RefreshableAsyncState<T> = {
+	value: ReadonlySignal<OmitUnion<AsyncProperty<T>, { state: 'inactive' }>>
+	refresh: () => unknown,
+	onPending: (callback: () => unknown) => RefreshableAsyncState<T>
+	onResolved: (callback: (value: T) => unknown) => RefreshableAsyncState<T>
+	onRejected: (callback: (error: Error) => unknown) => RefreshableAsyncState<T>
+}
+export function useAsyncRefreshable<T>(refresher: () => Promise<T>): RefreshableAsyncState<T> {
+	const asyncState = useAsyncState<T>()
+	const refresh = () => asyncState.waitFor(refresher)
+	useMemo(refresh, [])
+	const refreshableAsyncState: RefreshableAsyncState<T> = {
+		// typecast here because we know that `inactive` is unreachable since `reset` is never called and `refresh` is called immediately
+		value: asyncState.value as ReadonlySignal<OmitUnion<AsyncProperty<T>, {state: 'inactive'}>>,
+		refresh,
+		onPending: callback => { asyncState.onPending(callback); return refreshableAsyncState },
+		onResolved: callback => { asyncState.onResolved(callback); return refreshableAsyncState },
+		onRejected: callback => { asyncState.onRejected(callback); return refreshableAsyncState },
+	}
+	return refreshableAsyncState
 }
 
 export class OptionalSignal<T> extends Signal<Signal<T> | undefined> implements ReadonlySignal<Signal<T> | undefined> {
