@@ -45,9 +45,14 @@ export function CreateSafe(model: {
 	readonly safeCreated: (safeAddress: bigint) => unknown
 	readonly noticeError: (error: unknown) => unknown
 }) {
-	const { waitFor } = useAsyncState<bigint>().onResolved(model.safeCreated)
+	const { value, waitFor } = useAsyncState<bigint>().onRejected(model.noticeError).onResolved(model.safeCreated)
 	const onClick = () => waitFor(async () => await createAndInitializeSafe(model.wallet.value.ethereumClient, model.wallet.value.address))
-	return <span>Create a new Gnosis SAFE: <button onClick={onClick}>Create</button></span>
+	switch (value.value.state) {
+		case 'inactive': return <span>Create a new Gnosis SAFE: <button onClick={onClick}>Create</button></span>
+		case 'pending': return <Spinner/>
+		case 'rejected': return <>⚠️</>
+		case 'resolved': return <></>
+	}
 }
 
 export function SafeManager(model: {
@@ -55,13 +60,11 @@ export function SafeManager(model: {
 	readonly safeAddress: ReadonlySignal<bigint>
 	readonly noticeError: (error: unknown) => unknown
 }) {
-	const asyncSafeClient = useAsyncComputed(async () => await getSafeClient(model.wallet.value.ethereumClient, model.safeAddress.value))
+	const asyncSafeClient = useAsyncComputed(async () => await getSafeClient(model.wallet.value.ethereumClient, model.safeAddress.value), { onRejected: model.noticeError })
 
 	switch (asyncSafeClient.value.state) {
 		case 'pending': return <Spinner/>
-		case 'rejected':
-			model.noticeError(asyncSafeClient.value.error)
-			return <>⚠️</>
+		case 'rejected': return <>⚠️</>
 		case 'resolved': return <>
 			<Recovery ethereumClient={model.wallet.value.ethereumClient} safeClient={asyncSafeClient.value.signal} noticeError={model.noticeError}/>
 			<Signers safeClient={asyncSafeClient.value.signal} noticeError={model.noticeError}/>
@@ -167,7 +170,7 @@ function Recovery(model: {
 		}
 	})
 
-	return <div class='subwidget'>
+	return <div class='widget'>
 		<span><h1>Recoverers</h1><Refresh onClick={refresh}/></span>
 		<div style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
 			<RecovererList_/>
@@ -245,7 +248,7 @@ function Signers(model: {
 		}
 	})
 
-	return <div class='subwidget'>
+	return <div class='widget'>
 		<span><h1>Signers</h1><Refresh onClick={refresh}/></span>
 		<div>
 			<ThresholdText_/>

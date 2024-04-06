@@ -5,7 +5,7 @@ import { contract } from 'micro-web3'
 import { GNOSIS_SAFE_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
 import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify } from './utilities.js'
-import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
+import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetBlockByNumberParameters, EthGetBlockByNumberResult, EthGetCodeParameters, EthGetCodeResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -41,6 +41,12 @@ export abstract class EthereumClient {
 		return EthCallResult.parse(result)
 	}
 
+	public readonly getBaseFee = async(blockTag: EthGetBlockByNumberParameters[0]) => {
+		const result = await this.request({ method: 'eth_getBlockByNumber', params: [blockTag, false] })
+		const block = EthGetBlockByNumberResult.parse(result)
+		return block.baseFeePerGas
+	}
+
 	public readonly getBalance = async(...params: EthGetBalanceParameters) => {
 		const result = await this.request({ method: 'eth_getBalance', params })
 		return EthGetBalanceResult.parse(result)
@@ -49,6 +55,11 @@ export abstract class EthereumClient {
 	public readonly getTransactionCount = async (...params: EthGetTransactionCountParameters) => {
 		const result = await this.request({ method: 'eth_getTransactionCount', params })
 		return EthGetTransactionCountResult.parse(result)
+	}
+
+	public readonly getCode = async(...params: EthGetCodeParameters) => {
+		const result = await this.request({ method: 'eth_getCode', params })
+		return EthGetCodeResult.parse(result)
 	}
 
 	public readonly estimateGas = async (...[transaction, blockTag]: EthEstimateGasParameters) => {
@@ -300,15 +311,15 @@ export class EthereumClientMemory extends EthereumClient {
 	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
 
 	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
-		const nonce = await this.getTransactionCount(this.address, 'latest')
-		const gasLimit = await this.estimateGas(transaction, 'latest')
-		const chainId = await this.chainId()
+		const nonce = transaction.nonce || await this.getTransactionCount(this.address, 'latest')
+		const gasLimit = transaction.gas || await this.estimateGas(transaction, 'latest')
+		const chainId = transaction.chainId || await this.chainId()
 		const signedTransaction = await signTransactionWithKey({
 			type: '1559',
 			chainId,
 			nonce,
-			maxFeePerGas: 100n * 10n**9n,
-			maxPriorityFeePerGas: 10n**8n,
+			maxFeePerGas: transaction.maxFeePerGas || 100n * 10n**9n,
+			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n,
 			gasLimit,
 			to: transaction.to || null,
 			value: transaction.value || 0n,
@@ -397,10 +408,29 @@ async function jsonRpcRequest(endpoint: string, request: JsonRpcRequest, extraHe
 	const rawJsonRpcResponse = await response.json() as unknown
 	const jsonRpcResponse = JsonRpcResponse.parse(rawJsonRpcResponse)
 	if ('error' in jsonRpcResponse) {
-		if (typeof jsonRpcResponse.error.data === 'string' && jsonRpcResponse.error.data.startsWith('Reverted 0x')) {
-			throw new Error(`Contract reverted: ${new TextDecoder().decode(hexToBytes(jsonRpcResponse.error.data.slice('Reverted '.length)))}`)
+		function tryGetRevertedData(error: JsonRpcErrorResponse['error']) {
+			if (error.message.startsWith('Reverted ')) return error.message.slice('Reverted '.length)
+			if (error.message.startsWith('0x')) return error.message
+			if (typeof error.data === 'string' && error.data.startsWith('Reverted ')) return error.data.slice('Reverted '.length)
+			if (typeof error.data === 'string' && error.data.startsWith('0x')) return error.data
+			else return undefined
+		}
+		const revertedData = tryGetRevertedData(jsonRpcResponse.error)
+		if (revertedData === undefined) {
+			throw new Error(`JSON-RPC Response Error: ${jsonRpcResponse.error.message}\nRequest:\n${jsonStringify(request)}\nResponse:\n${jsonRpcResponse.error.code}: ${jsonStringify(jsonRpcResponse.error.data)}`)
+		} else if (revertedData.startsWith('0x08c379a0')) {
+			// slice off the function selector and the string offset
+			const errorData = hexToBytes(revertedData).slice(4 + 32)
+			const length = Number(bytesToBigint(errorData.slice(0, 32)))
+			const utf8String = errorData.slice(32, 32+length)
+			const decodedString = new TextDecoder().decode(utf8String)
+			throw new Error(`Contract reverted: ${decodedString}`)
+		} else if (/^0x[a-fA-F0-9]{8}0/.test(revertedData)) {
+			throw new Error(`Contract reverted with unknown encoded error: ${revertedData}`)
+		} else if (revertedData.startsWith('0x')) {
+			throw new Error(`Contract reverted: ${new TextDecoder().decode(hexToBytes(revertedData))}`)
 		} else {
-			throw new Error(`JSON-RPC Response Error:\nRequest:\n${jsonStringify(request)}\nResponse:\n${jsonRpcResponse.error.code}: ${jsonRpcResponse.error.message}\n${jsonStringify(jsonRpcResponse.error.data)}`)
+			throw new Error(`Contract reverted: ${revertedData}`)
 		}
 	}
 	return jsonRpcResponse.result

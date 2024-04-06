@@ -66,8 +66,11 @@ export function SwapAndSend(model: SwapAndSendModel) {
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 3000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 3000n },
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 10000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 10000n },
 					]
-					const arrayOfPromises = arrayOfObjectsWithPromises.map(async x => ({ amountOut: (await x.promise).amountOut * 9990n / 10000n, fee: x.fee }))
-					const arrayOfResults = await Promise.all(arrayOfPromises)
+					const arrayOfPromises: Promise<{ amountOut: bigint, fee: bigint }>[] = arrayOfObjectsWithPromises.map(async x => ({ amountOut: (await x.promise).amountOut * 9990n / 10000n, fee: x.fee }))
+					const arrayOfResults = (await Promise.allSettled(arrayOfPromises)).filter((x): x is PromiseFulfilledResult<{ amountOut: bigint, fee: bigint }> => x.status === 'fulfilled').map(x => x.value)
+					// if `arrayOfResults` is empty, it means all of the promises rejected, so just await them all normally and one of them will throw
+					if (arrayOfResults.length === 0) await Promise.all(arrayOfPromises)
+					// we have a null assertion here because in the case of an empty array we'll throw on the line above
 					return arrayOfResults.sort((a, b) => Number(b.amountOut - a.amountOut))[0]!
 				}
 
@@ -118,7 +121,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 					const arrayOfPromises: Promise<{ amountIn: bigint, fee: bigint }>[] = arrayOfObjectsWithPromises.map(async x => ({ amountIn: (await x.promise).amountIn * 10010n / 10000n, fee: x.fee }))
 					const arrayOfResults = (await Promise.allSettled(arrayOfPromises)).filter((x): x is PromiseFulfilledResult<{ amountIn: bigint, fee: bigint }> => x.status === 'fulfilled').map(x => x.value)
 					// if `arrayOfResults` is empty, it means all of the promises rejected, so just await them all normally and one of them will throw
-					if (arrayOfResults.length === 0) Promise.all(arrayOfResults)
+					if (arrayOfResults.length === 0) await Promise.all(arrayOfPromises)
 					// we have a null assertion here because in the case of an empty array we'll throw on the line above
 					return arrayOfResults.sort((a, b) => Number(a.amountIn - b.amountIn))[0]!
 				}
@@ -215,12 +218,26 @@ function SwapButton(model: SwapButtonModel) {
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
 			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
 			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
-				// special case for simple ETH transfers
-				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
-					to: recipient,
-					value: route.amountIn,
-					data: new Uint8Array(0),
-				})
+				if (route.amountIn === await wallet.ethereumClient.getBalance(wallet.address, 'latest')) {
+					// special case for sweeping
+					const baseFee = await wallet.ethereumClient.getBaseFee('latest')
+					const maxFeePerGas = baseFee * 2n
+					const transaction = {
+						to: recipient,
+						value: 1n, // smallest amount possible for gas estimation (hopefully results don't differ by amount)
+						data: new Uint8Array(0),
+					} as const
+					const gasLimit = await wallet.ethereumClient.estimateGas(transaction, 'latest')
+					const value = route.amountIn - gasLimit * maxFeePerGas
+					sendTransactionResult = await wallet.ethereumClient.sendTransaction({ ...transaction, value, gas: gasLimit, maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas })
+				} else {
+					// special case for simple ETH transfers
+					sendTransactionResult = await wallet.ethereumClient.sendTransaction({
+						to: recipient,
+						value: route.amountIn,
+						data: new Uint8Array(0),
+					})
+				}
 			} else if (route.source === route.target && typeof route.source.address === 'bigint') {
 				// special case for simple token transfers
 				const tokenAddress = route.source.address

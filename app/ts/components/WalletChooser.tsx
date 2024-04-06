@@ -1,5 +1,5 @@
 import { utils as secp256k1Utils } from '@noble/secp256k1'
-import { ReadonlySignal, batch, useSignal, useSignalEffect } from '@preact/signals'
+import { ReadonlySignal, useSignal, useSignalEffect } from '@preact/signals'
 import { HDKey } from '@scure/bip32'
 import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
 import { wordlist } from '@zoltu/bip39/wordlists/english.js'
@@ -17,6 +17,7 @@ import { Refresh } from './Refresh.js'
 import { RpcChooser } from './RpcChooser.js'
 import { Select } from './Select.js'
 import { Spinner } from './Spinner.js'
+import { getExistingSafeAddresses } from '../library/gnosis-safe.js'
 
 export interface WalletChooserModel {
 	readonly wallet: OptionalSignal<Wallet>
@@ -54,17 +55,15 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 			model.wallet.deepValue = { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue }
 		}
 	})
-	const client = maybeEthereumClient.deepValue
-	if (client === undefined) {
+	if (maybeEthereumClient.deepValue === undefined) {
 		return <RpcChooser ethereumClient={maybeEthereumClient} noticeError={model.noticeError}/>
 	} else if (maybeAddress.deepValue === undefined) {
 		return <AddressPicker required address={maybeAddress} extraOptions={savedWallets}/>
 	} else {
-		const address = maybeAddress.deepValue
-		const [Rpc_] = useState(() => () => <span>RPC: <code>{client.endpoint}</code></span>)
-		const [Address_] = useState(() => () => <span>Address: <code>{addressBigintToHex(address)}</code></span>)
+		const [Rpc_] = useState(() => ({client}:{client: EthereumClientJsonRpc}) => <span>RPC: <code>{client.endpoint}</code></span>)
+		const [Address_] = useState(() => ({address}:{address: bigint}) => <span>Address: <code>{addressBigintToHex(address)}</code></span>)
 		const [ChangeButton_] = useState(() => () => <button onClick={() => { maybeEthereumClient.clear(); maybeAddress.clear() }} style={{width: '100%'}}>Change</button>)
-		const [RememberButton_] = useState(() => () => {
+		const [RememberButton_] = useState(() => ({address}:{address: bigint}) => {
 			if (savedWallets.value.includes(address)) {
 				return <button onClick={() => forgetWalletAddress(address)} style={{width:'100%'}}>Forget</button>
 			} else {
@@ -73,12 +72,12 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 		})
 		return <div id='readonly-builder' style={model.style}>
 			<div style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
-				<Rpc_/>
-				<Address_/>
+				<Rpc_ client={maybeEthereumClient.deepValue}/>
+				<Address_ address={maybeAddress.deepValue}/>
 			</div>
 			<div style={{ flexDirection: 'column' }}>
 				<ChangeButton_/>
-				<RememberButton_/>
+				<RememberButton_ address={maybeAddress.deepValue}/>
 			</div>
 		</div>
 	}
@@ -130,9 +129,9 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 		}
 	})
 	const [SignerWallet_] = useState(() => () => {
-		return <div class='subwidget' style={{ width: '100%' }}>
+		return <div class='widget' style={{ width: '100%' }}>
 			<div>Signer:</div>
-			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError} class='subwidget' style={{ width: '100%' }}/>
+			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError} class='widget' style={{ width: '100%' }}/>
 		</div>
 	})
 	const [RememberButton_] = useState(()=> () => {
@@ -145,7 +144,7 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 		}
 	})
 	const [ContractWallet_] = useState(() => () => {
-		return <div class='subwidget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+		return <div class='widget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
 			<div style={{ flexDirection: 'column', flexGrow: 1, alignItems: 'flex-start' }}>
 				<span>Recoverable Wallet:</span>
 				<span><ContractAddress_/></span>
@@ -164,18 +163,29 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 }
 
 function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
-	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
+	const maybeUnderlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
+	const suggestedSafes = useAsyncState<bigint[]>(undefined, { onRejected: model.noticeError })
 	useSignalEffect(() => {
-		if (underlyingWallet.deepValue === undefined || maybeAddress.deepValue === undefined) {
+		const underlyingWallet = maybeUnderlyingWallet.deepValue
+		const address = maybeAddress.deepValue
+		if (underlyingWallet === undefined || address !== undefined) {
+			// user either has no underlying wallet selected or they already have a SAFE selected, so clear the SAFE address suggestions
+			suggestedSafes.reset()
+		}
+		if (underlyingWallet !== undefined && address === undefined) {
+			// user has selected an underlying wallet but hasn't selected a safe yet, fill in the SAFE address suggestions
+			suggestedSafes.waitFor(async () => await getExistingSafeAddresses(underlyingWallet.ethereumClient, underlyingWallet.address))
+		}
+		if (underlyingWallet === undefined || address === undefined) {
 			model.wallet.deepValue = undefined
 			return
 		}
-		const ethereumClient = new EthereumClientSafe(underlyingWallet.deepValue.ethereumClient, underlyingWallet.deepValue.address, maybeAddress.deepValue)
+		const ethereumClient = new EthereumClientSafe(underlyingWallet.ethereumClient, underlyingWallet.address, address)
 		model.wallet.deepValue = {
 			ethereumClient,
-			address: maybeAddress.deepValue,
-			...underlyingWallet.deepValue.readonly ? {
+			address,
+			...underlyingWallet.readonly ? {
 				readonly: true
 			} : {
 				readonly: false,
@@ -187,12 +197,27 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 	const [ContractAddress_] = useState(() => () => {
 		return (maybeAddress.deepValue === undefined)
 			? <AddressPicker required address={maybeAddress} extraOptions={savedSafeWallets}/>
-			: <>Contract: <code>{addressBigintToHex(maybeAddress.deepValue)}</code></>
+			: <span>Contract: <code>{addressBigintToHex(maybeAddress.deepValue)}</code></span>
+	})
+	const [SelectSuggestedSafeButton_] = useState(() => ({address}: {address:bigint}) => {
+		return <button onClick={() => { maybeAddress.deepValue = address }}>Select</button>
+	})
+	const [ContractAddressSelector_] = useState(() => () => {
+		switch (suggestedSafes.value.value.state) {
+			case 'inactive':
+				return <></>
+			case 'pending':
+				return <Spinner/>
+			case 'rejected':
+				return <>⚠️</>
+			case 'resolved':
+				return <>{suggestedSafes.value.value.value.map(suggestedSafeAddress => <span><code>{addressBigintToHex(suggestedSafeAddress)}</code><SelectSuggestedSafeButton_ address={suggestedSafeAddress}/></span>)}</>
+		}
 	})
 	const [SignerWallet_] = useState(() => () => {
-		return <div class='subwidget' style={{ width: '100%' }}>
-			<span>Signer:</span>
-			<WalletChooser wallet={underlyingWallet} noticeError={model.noticeError} class='subwidget' style={{ width: '100%' }}/>
+		return <div class='widget' style={{ width: '100%' }}>
+			<h1>Signer:</h1>
+			<WalletChooser wallet={maybeUnderlyingWallet} noticeError={model.noticeError} class='widget' style={{ width: '100%' }}/>
 		</div>
 	})
 	const [RememberButton_] = useState(()=> () => {
@@ -205,10 +230,11 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 		}
 	})
 	const [ContractWallet_] = useState(() => () => {
-		return <div class='subwidget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+		return <div class='widget' style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
 			<div style={{ flexDirection: 'column', flexGrow: 1, alignItems: 'flex-start' }}>
-				<span>Gnosis SAFE Wallet:</span>
-				<span><ContractAddress_/></span>
+				<h1>Contract:</h1>
+				<ContractAddressSelector_/>
+				<ContractAddress_/>
 			</div>
 			<div style={{ flexDirection: 'column' }}>
 				<ChangeButton_/>
@@ -217,8 +243,8 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 		</div>
 	})
 	return <div id='safe-builder' style={{ ...model.style, flexDirection: 'column' }}>
-		<ContractWallet_/>
 		<SignerWallet_/>
+		<ContractWallet_/>
 	</div>
 }
 
@@ -272,21 +298,19 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
-	const { value: asyncWalletBuild, waitFor: waitForWalletBuild } = useAsyncState()
-	useSignalEffect(() => batch(() => {
-		if (asyncWalletBuild.value.state === 'rejected') {
-			model.noticeError(asyncWalletBuild.value.error)
-		}
-		if (asyncWalletBuild.value.state === 'pending' || maybeEthereumClientRpc.deepValue === undefined || maybeDerivationPath.deepValue === undefined) {
-			model.wallet.clear()
-		}
-	}))
+	const { value: asyncWalletBuild, waitFor: waitForWalletBuild, reset: resetWalletBuild } = useAsyncState().onRejected(model.noticeError)
+	function reset() {
+		model.wallet.clear()
+		maybeEthereumClientRpc.clear()
+		maybeDerivationPath.clear()
+		resetWalletBuild()
+	}
 	const [Address_] = useState(() => () => {
 		const wallet = model.wallet.deepValue
 		if (wallet === undefined) return <></>
 		return <div>Address:<code>{addressBigintToHex(wallet.address)}</code></div>
 	})
-	const [ChangeButton_] = useState(() => () => <button onClick={() => { maybeEthereumClientRpc.clear() }} style={{width: '100%'}}>Change</button>)
+	const [ChangeButton_] = useState(() => () => <button onClick={reset} style={{width: '100%'}}>Change</button>)
 	const [RememberButton_] = useState(() => () => {
 		const wallet = model.wallet.deepValue
 		if (wallet === undefined) return <></>
@@ -422,5 +446,17 @@ function DerivationPathPicker({ value: maybeDerivationPath }: { value: OptionalS
 	const sanitize = (input: string) => (input === '') ? '' : `m/${input.slice(2).replaceAll(/[^m\/\d']/g, '')}`
 	const serialize = (input: `m/${string}` | undefined) => input === undefined ? '' : input
 	const tryParse = (input: string) => ({ ok: true, value: /^m(?:\/\d+'?)+$/.test(input) ? input as `m/${string}` : undefined })
-	return <AutosizingInput value={maybeDerivationPath} sanitize={sanitize} serialize={serialize} tryParse={tryParse} type='text' pattern="^m(?:\/\d+'?)+$" placeholder="m/44'/60'/0'/0/0" dataList={[`m/44'/60'/0'/0/0`]}/>
+	const dataList = [
+		`m/44'/60'/0'/0/0`,
+		`m/44'/60'/0'/0/1`,
+		`m/44'/60'/0'/0/2`,
+		`m/44'/60'/0'/0/3`,
+		`m/44'/60'/0'/0/4`,
+		`m/44'/60'/0'/0/5`,
+		`m/44'/60'/0'/0/6`,
+		`m/44'/60'/0'/0/7`,
+		`m/44'/60'/0'/0/8`,
+		`m/44'/60'/0'/0/9`,
+	]
+	return <AutosizingInput value={maybeDerivationPath} sanitize={sanitize} serialize={serialize} tryParse={tryParse} type='text' pattern="^m(?:\/\d+'?)+$" placeholder="m/44'/60'/0'/0/0" dataList={dataList}/>
 }

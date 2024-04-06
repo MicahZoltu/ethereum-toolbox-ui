@@ -54,7 +54,7 @@ code {
 	/* tall enough to fit a button */
 	min-height: calc(1em + 17px);
 }
-.widget > div {
+.widget div {
 	width: 100%;
 }
 .widget h1 {
@@ -65,14 +65,27 @@ code {
 	padding: initial;
 	margin: initial;
 }
-.subwidget {
-	flex-direction: column;
-	align-items: flex-start;
+.widget .widget {
+	justify-content: flex-start;
+	margin: 0px;
 	border: thin dashed;
-	padding: 5px;
 }
-.subwidget h1 {
+.widget .widget div {
+	width: unset;
+}
+.widget .widget h1 {
 	font-style: 'bold';
+	font-size: inherit;
+	line-height: inherit;
+	padding: initial;
+	margin: initial;
+}
+.widget .widget .widget {
+	border: thin dotted;
+	margin: 0px;
+}
+.widget .widget .widget h1 {
+	font-style: italic;
 	font-size: inherit;
 	line-height: inherit;
 	padding: initial;
