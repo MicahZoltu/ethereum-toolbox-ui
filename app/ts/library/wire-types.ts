@@ -533,6 +533,15 @@ export const EthGetTransactionCountJsonRpcRequest = t.Intersect(JsonRpcRequestBa
 export type EthGetTransactionCountResult = t.Static<typeof EthGetTransactionCountResult>
 export const EthGetTransactionCountResult = EthereumQuantity
 
+export type EthGetCodeParameters = t.Static<typeof EthGetCodeParameters>
+export const EthGetCodeParameters = t.ReadonlyTuple(EthereumAddress, EthereumBlockTag)
+export type EthGetCodeRequest = t.Static<typeof EthGetCodeRequest>
+export const EthGetCodeRequest = t.ReadonlyObject({ method: t.Literal('eth_getCode'), params: EthGetCodeParameters })
+export type EthGetCodeJsonRpcRequest = t.Static<typeof EthGetCodeJsonRpcRequest>
+export const EthGetCodeJsonRpcRequest = t.Intersect(JsonRpcRequestBase, EthGetCodeRequest)
+export type EthGetCodeResult = t.Static<typeof EthGetCodeResult>
+export const EthGetCodeResult = EthereumData
+
 export type EthGetTransactionReceiptParameters = t.Static<typeof EthGetTransactionReceiptParameters>
 export const EthGetTransactionReceiptParameters = t.ReadonlyTuple(EthereumBytes32)
 export type EthGetTransactionReceiptRequest = t.Static<typeof EthGetTransactionReceiptRequest>
@@ -608,6 +617,7 @@ export const EthereumRequest = t.Union(
 	EthGetStorageAtRequest,
 	EthGetTransactionByHashRequest,
 	EthGetTransactionCountRequest,
+	EthGetCodeRequest,
 	EthGetTransactionReceiptRequest,
 	EthRequestAccountsRequest,
 	EthSendRawTransactionRequest,
@@ -626,6 +636,7 @@ export const JsonRpcRequest = t.Union(
 	EthGetStorageAtJsonRpcRequest,
 	EthGetTransactionByHashJsonRpcRequest,
 	EthGetTransactionCountJsonRpcRequest,
+	EthGetCodeJsonRpcRequest,
 	EthGetTransactionReceiptJsonRpcRequest,
 	EthRequestAccountsJsonRpcRequest,
 	EthSendRawTransactionJsonRpcRequest,

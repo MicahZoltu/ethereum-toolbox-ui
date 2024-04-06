@@ -1,7 +1,7 @@
 import { keccak_256 } from '@noble/hashes/sha3'
 import { addressBigintToHex, addressHexToBigint, bigintToBytes, bytesToBigint, hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
 import { contract } from 'micro-web3'
-import { GNOSIS_SAFE_ABI, GNOSIS_SAFE_DELAY_MODULE_ABI, GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS, GNOSIS_SAFE_FALLBACK_HANDLER_ADDRESS, GNOSIS_SAFE_MASTER_ADDRESS, GNOSIS_SAFE_PROXY_FACTORY_ABI, GNOSIS_SAFE_PROXY_FACTORY_ADDRESS, MULTISEND_CALL_ABI, MULTISEND_CALL_ADDRESS } from "../library/contract-details.js"
+import { GNOSIS_SAFE_ABI, GNOSIS_SAFE_DELAY_MODULE_ABI, GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS, GNOSIS_SAFE_FALLBACK_HANDLER_ADDRESS, GNOSIS_SAFE_MASTER_ADDRESS, GNOSIS_SAFE_PROXY_DEPLOYMENT_BYTECODE, GNOSIS_SAFE_PROXY_FACTORY_ABI, GNOSIS_SAFE_PROXY_FACTORY_ADDRESS, MULTISEND_CALL_ABI, MULTISEND_CALL_ADDRESS } from "../library/contract-details.js"
 import { PermitUnion, ResolvePromise } from "../library/typescript.js"
 import { IEthereumClient } from './ethereum.js'
 
@@ -12,8 +12,8 @@ const multisendContract = contract(MULTISEND_CALL_ABI)
 const delayModuleContract = contract(GNOSIS_SAFE_DELAY_MODULE_ABI)
 const delayModuleProxyFactoryContract = contract(GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI)
 
-export async function createAndInitializeSafe(ethereumClient: IEthereumClient, ownerAddress: bigint) {
-	const initializer = safeContract.setup.encodeInput({
+function getSafeInitializerForOwner(ownerAddress: bigint) {
+	return safeContract.setup.encodeInput({
 		_owners: [addressBigintToHex(ownerAddress)],
 		_threshold: 1n,
 		to: addressBigintToHex(0n),
@@ -23,9 +23,14 @@ export async function createAndInitializeSafe(ethereumClient: IEthereumClient, o
 		payment: 0n,
 		paymentReceiver: addressBigintToHex(0n),
 	})
+}
+
+export async function createAndInitializeSafe(ethereumClient: IEthereumClient, ownerAddress: bigint) {
+	const initializer = getSafeInitializerForOwner(ownerAddress)
+	const nextAvailableNonce = await getNextSafeNonce(ethereumClient, ownerAddress)
 	const result = await ethereumClient.sendTransaction({
 		to: GNOSIS_SAFE_PROXY_FACTORY_ADDRESS,
-		data: safeFactoryContract.createProxyWithNonce.encodeInput({ _singleton: addressBigintToHex(GNOSIS_SAFE_MASTER_ADDRESS), initializer, saltNonce: BigInt(Math.round(Date.now() / 1000)) }),
+		data: safeFactoryContract.createProxyWithNonce.encodeInput({ _singleton: addressBigintToHex(GNOSIS_SAFE_MASTER_ADDRESS), initializer, saltNonce: nextAvailableNonce }),
 	})
 	// event ProxyCreation(GnosisSafeProxy proxy, address singleton)
 	const receipt = await result.waitForReceipt()
@@ -205,6 +210,7 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 			to: safeAddress,
 			data: safeContract.getOwners.encodeInput({}),
 		}, 'latest')
+		if (result.length === 0) return []
 		return safeContract.getOwners.decodeOutput(result).map(addressHexToBigint)
 	}
 
@@ -227,6 +233,7 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 				value: 0n,
 				data: safeContract.getModulesPaginated.encodeInput({ start: addressBigintToHex(nextModule), pageSize })
 			}, 'latest')
+			if (result.length === 0) break
 			const { array, next } = safeContract.getModulesPaginated.decodeOutput(result)
 			modules.push(...array.map(addressHexToBigint))
 			nextModule = addressHexToBigint(next)
@@ -309,6 +316,10 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 		const ownersPromise = getOwners()
 		const thresholdPromise = getThreshold()
 		const modulesPromise = getModules()
+		// we are querying all 3 optimistically, but if this isn't a safe then all 3 will throw and the first one will be caught and the remaining two will be "uncaught", so we "catch" them here just to silence browser warnings
+		ownersPromise.catch(() => {})
+		thresholdPromise.catch(() => {})
+		modulesPromise.catch(() => {})
 		let owners = await ownersPromise
 		let threshold = await thresholdPromise
 		let modules = await modulesPromise
@@ -324,3 +335,27 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 export type OwnedSafeClient = PermitUnion<ResolvePromise<ReturnType<typeof getSafeClient>>, { owned: true }>
 export type UnownedSafeClient = PermitUnion<ResolvePromise<ReturnType<typeof getSafeClient>>, { owned: false }>
 export type SafeClient = OwnedSafeClient | UnownedSafeClient
+
+export async function getNextSafeNonce(ethereumClient: IEthereumClient, ownerAddress: bigint) {
+	const existingSafeAddresses = await getExistingSafeAddresses(ethereumClient, ownerAddress)
+	return BigInt(existingSafeAddresses.length)
+}
+
+export async function getExistingSafeAddresses(ethereumClient: IEthereumClient, ownerAddress: bigint) {
+	function calculateSafeProxyAddress(saltNonce: bigint) {
+		const initializer = getSafeInitializerForOwner(ownerAddress)
+		const deployerAddressBytes = bigintToBytes(GNOSIS_SAFE_PROXY_FACTORY_ADDRESS, 20)
+		const saltBytes = keccak_256(Uint8Array.from([...keccak_256(initializer), ...bigintToBytes(saltNonce, 32)]))
+		const deploymentDataHash = keccak_256(Uint8Array.from([...GNOSIS_SAFE_PROXY_DEPLOYMENT_BYTECODE, ...bigintToBytes(GNOSIS_SAFE_MASTER_ADDRESS, 32)]))
+		return bytesToBigint(keccak_256(Uint8Array.from([0xff, ...deployerAddressBytes, ...saltBytes, ...deploymentDataHash])).slice(12))
+	}
+	const addresses: bigint[] = []
+	while (true) {
+		const nextAddress = calculateSafeProxyAddress(BigInt(addresses.length))
+		const codeAtAddress = await ethereumClient.getCode(nextAddress, 'latest')
+		if (codeAtAddress.length === 0) break
+		addresses.push(nextAddress)
+	}
+	return addresses
+}
+// expected address: 0x0FCB9a176d2bBC7b61358B9d3fd1A92FDb98C9DA

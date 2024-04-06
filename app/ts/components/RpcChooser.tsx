@@ -29,7 +29,7 @@ export function RpcChooser(model: RpcChooserModel) {
 			urlWaitFor(async () => {
 				const url = internalValue.value || 'http://localhost:8545'
 				if (!url.startsWith('http://') && !url.startsWith('https://')) throw new Error(`JSON-RPC URL must start with http:// or https://\n${url}`)
-				const response = await fetch(url, { method: 'POST', body: '{ "jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[] }' })
+				const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{ "jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[] }' })
 				if (!response.ok) throw new Error(`${url} did not respond to Block Number request with an OK status code.`)
 				const json = await response.json() as unknown
 				if (typeof json !== 'object'

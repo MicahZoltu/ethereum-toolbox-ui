@@ -24,11 +24,11 @@ export type Callbacks<T> = {
 	onRejected?: (error: Error) => unknown
 }
 
-export function useAsyncState<T>(initialValue?: T): AsyncState<T> {
-	let onInactive: (() => unknown) | undefined = undefined
-	let onPending: (() => unknown) | undefined = undefined
-	let onRejected: ((error: Error) => unknown) | undefined = undefined
-	let onResolved: ((value: T) => unknown) | undefined = undefined
+export function useAsyncState<T>(initialValue?: T, callbacks?: Callbacks<T>): AsyncState<T> {
+	let onInactive: (() => unknown) | undefined = callbacks?.onInactive
+	let onPending: (() => unknown) | undefined = callbacks?.onPending
+	let onRejected: ((error: Error) => unknown) | undefined = callbacks?.onRejected
+	let onResolved: ((value: T) => unknown) | undefined = callbacks?.onResolved
 
 	function getCaptureAndCancelOthers() {
 		// delete previously captured signal so any pending async work will no-op when they resolve
@@ -129,7 +129,7 @@ export class OptionalSignal<T> extends Signal<Signal<T> | undefined> implements 
 
 	public constructor(value: Signal<T> | T | undefined, startUndefined?: boolean) {
 		super(value === undefined || startUndefined === true ? undefined : value instanceof Signal ? value : new Signal(value))
-		this.set.bind(this)
+		this.set = this.set.bind(this)
 		if (this.value instanceof Signal) this.inner = this.value
 	}
 
