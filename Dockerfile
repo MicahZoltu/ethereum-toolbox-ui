@@ -2,9 +2,14 @@ FROM node:21.7.2-alpine3.18@sha256:d3398787ac2f4d83206293be6b41371a628383eadaf7f
 
 RUN apk add --no-cache git
 
-WORKDIR /
-RUN git clone https://github.com/MicahZoltu/ethereum-toolbox-ui.git
-WORKDIR /ethereum-toolbox-ui
+ARG COMMIT_HASH
+
+WORKDIR /source
+RUN git init
+RUN git remote add origin https://github.com/MicahZoltu/ethereum-toolbox-ui.git
+RUN git fetch --depth 1 origin $COMMIT_HASH
+RUN git checkout FETCH_HEAD
+WORKDIR /source
 RUN npm run setup
 
 # --------------------------------------------------------
@@ -25,15 +30,15 @@ RUN apt-get update && apt-get install -y curl=7.88.1-10+deb12u5 jq=1.6-2.1
 COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 # Copy app's build output and initialize IPFS api
-COPY --from=builder /ethereum-toolbox-ui/app /export
 RUN ipfs init
+COPY --from=builder /source/app /export
 RUN ipfs add --cid-version 1 --quieter --only-hash -r /export > ipfs_hash.txt
 
 # --------------------------------------------------------
 # Publish Script: Option to host app locally or on nft.storage
 # --------------------------------------------------------
 
-WORKDIR /app
+WORKDIR /export
 COPY <<'EOF' /entrypoint.sh
 #!/bin/sh
 set -e
