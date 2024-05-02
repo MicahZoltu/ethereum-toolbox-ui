@@ -1,7 +1,6 @@
-import { utils as secp256k1Utils } from '@noble/secp256k1'
 import { ReadonlySignal, useSignal, useSignalEffect } from '@preact/signals'
 import { HDKey } from '@scure/bip32'
-import { mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
+import { generateMnemonic, mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
 import { wordlist } from '@zoltu/bip39/wordlists/english.js'
 import { getAddress as getAddressFromLedger } from '@zoltu/ethereum-ledger'
 import { getAddress as getAddressFromPrivateKey } from '@zoltu/ethereum-transactions'
@@ -10,14 +9,14 @@ import { useState } from 'preact/hooks'
 import { JSX } from 'preact/jsx-runtime'
 import { forgetRecoverableWalletAddress, forgetSafeWalletAddress, forgetWalletAddress, forgetWindowWalletAddress, rememberLedgerWalletAddress, rememberRecoverableWalletAddress, rememberSafeWalletAddress, rememberWindowWalletAddress, savedRecoverableWallets, savedSafeWallets, savedWallets, savedWindowWallets } from '../library/addresses.js'
 import { EthereumClientJsonRpc, EthereumClientLedger, EthereumClientMemory, EthereumClientRecoverable, EthereumClientSafe, EthereumClientWindow, Wallet } from '../library/ethereum.js'
-import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
+import { getExistingSafeAddresses } from '../library/gnosis-safe.js'
+import { AsyncState, OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
 import { AddressPicker } from './AddressPicker.js'
 import { AutosizingInput } from './AutosizingInput.js'
 import { Refresh } from './Refresh.js'
 import { RpcChooser } from './RpcChooser.js'
 import { Select } from './Select.js'
 import { Spinner } from './Spinner.js'
-import { getExistingSafeAddresses } from '../library/gnosis-safe.js'
 
 export interface WalletChooserModel {
 	readonly wallet: OptionalSignal<Wallet>
@@ -411,7 +410,7 @@ function MnemonicOrKeyPrompt({ seed, privateKey, noticeError }: { seed: Optional
 		const [ChangeButton_] = useState(() => () => <button onClick={reset} style={{ marginLeft: 'auto' }}>Change</button>)
 		const [Input_] = useState(() => () => <AutosizingInput type='password' autocomplete='off' placeholder='zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong' value={internalValue}/>)
 		const [NextButton_] = useState(() => () => <button onClick={onClick}>Next</button>)
-		const [RandomButton_] = useState(() => () => <button onClick={() => privateKey.deepValue = bytesToBigint(secp256k1Utils.randomPrivateKey())}>Random</button>)
+		const [RandomButton_] = useState(() => () => <button onClick={() => { navigator.clipboard.writeText(generateMnemonic(wordlist)); noticeError(new Error('Mnemonic copied to clipboard.')) }}>Random</button>)
 		switch (value.value.state) {
 			case 'inactive': return <><label>Mnemonic or Private Key<Input_/></label><RandomButton_/><NextButton_/></>
 			case 'pending': return <>Validating {internalValue.value}...<Spinner/></>
