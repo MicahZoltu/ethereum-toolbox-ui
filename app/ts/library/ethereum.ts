@@ -311,19 +311,21 @@ export class EthereumClientMemory extends EthereumClient {
 	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
 
 	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
+		const balance = this.getBalance(this.address, 'latest')
 		const nonce = transaction.nonce || this.getTransactionCount(this.address, 'latest')
 		const gasLimit = transaction.gas || this.estimateGas(transaction, 'latest')
-		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(x => x * 2n)
+		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(async baseFee => ((baseFee * 2n * await gasLimit + value) > await balance) ? ((await balance - value) / await gasLimit) : baseFee * 2n)
 		const chainId = transaction.chainId || this.chainId()
+		const value = transaction.value || 0n
 		const signedTransaction = await signTransactionWithKey({
 			type: '1559',
 			chainId: await chainId,
 			nonce: await nonce,
 			maxFeePerGas: await maxFeePerGas,
-			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n,
+			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n > await maxFeePerGas ? await maxFeePerGas : 10n**8n,
 			gasLimit: await gasLimit,
 			to: transaction.to || null,
-			value: transaction.value || 0n,
+			value,
 			data: transaction.data || new Uint8Array(0),
 			accessList: [],
 		}, this.privateKey)
