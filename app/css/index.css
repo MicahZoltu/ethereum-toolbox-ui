@@ -54,7 +54,7 @@ code {
 	/* tall enough to fit a button */
 	min-height: calc(1em + 17px);
 }
-.widget div {
+.widget > div {
 	width: 100%;
 }
 .widget h1 {
@@ -70,7 +70,7 @@ code {
 	margin: 0px;
 	border: thin dashed;
 }
-.widget .widget div {
+.widget .widget > div {
 	width: unset;
 }
 .widget .widget h1 {
