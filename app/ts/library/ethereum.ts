@@ -311,16 +311,17 @@ export class EthereumClientMemory extends EthereumClient {
 	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
 
 	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
-		const nonce = transaction.nonce || await this.getTransactionCount(this.address, 'latest')
-		const gasLimit = transaction.gas || await this.estimateGas(transaction, 'latest')
-		const chainId = transaction.chainId || await this.chainId()
+		const nonce = transaction.nonce || this.getTransactionCount(this.address, 'latest')
+		const gasLimit = transaction.gas || this.estimateGas(transaction, 'latest')
+		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(x => x * 2n)
+		const chainId = transaction.chainId || this.chainId()
 		const signedTransaction = await signTransactionWithKey({
 			type: '1559',
-			chainId,
-			nonce,
-			maxFeePerGas: transaction.maxFeePerGas || 100n * 10n**9n,
+			chainId: await chainId,
+			nonce: await nonce,
+			maxFeePerGas: await maxFeePerGas,
 			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n,
-			gasLimit,
+			gasLimit: await gasLimit,
 			to: transaction.to || null,
 			value: transaction.value || 0n,
 			data: transaction.data || new Uint8Array(0),
