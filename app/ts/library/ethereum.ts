@@ -4,7 +4,7 @@ import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-t
 import { contract } from 'micro-web3'
 import { GNOSIS_SAFE_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
 import { HexAddress, ResolvePromise } from './typescript.js'
-import { jsonStringify } from './utilities.js'
+import { jsonStringify, sleep } from './utilities.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetBlockByNumberParameters, EthGetBlockByNumberResult, EthGetCodeParameters, EthGetCodeResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
 
 export function fromChecksummedAddress(address: string) {
@@ -82,21 +82,21 @@ export abstract class EthereumClient {
 	public readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters) => {
 		const result = await this.request({ method: 'eth_sendTransaction', params: [{...this.address ? {from: this.address} : {}, ...transaction}] })
 		const transactionHash = EthSendTransactionResult.parse(result)
-		return {
-			transactionHash,
-			waitForReceipt: async () => {
-				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
-				do {
-					receipt = await this.getTransactionReceipt(transactionHash)
-				} while (receipt === null)
-				return receipt
-			}
-		}
+		return { transactionHash, waitForReceipt: () => this.waitForReceipt(transactionHash) }
 	}
 
 	public readonly getTransactionReceipt = async (...params: EthGetTransactionReceiptParameters) => {
 		const result = await this.request({ method: 'eth_getTransactionReceipt', params })
 		return EthTransactionReceiptResult.parse(result)
+	}
+
+	public readonly waitForReceipt = async (transactionHash: bigint) => {
+		let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
+		while (true) {
+			receipt = await this.getTransactionReceipt(transactionHash)
+			if (receipt !== null) return receipt
+			await sleep(1000)
+		}
 	}
 }
 
@@ -331,16 +331,7 @@ export class EthereumClientMemory extends EthereumClient {
 		}, this.privateKey)
 		const encodedTransaction = encodeTransaction(signedTransaction)
 		const transactionHash = await this.sendRawTransaction(encodedTransaction)
-		return {
-			transactionHash,
-			waitForReceipt: async () => {
-				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
-				do {
-					receipt = await this.getTransactionReceipt(transactionHash)
-				} while (receipt === null)
-				return receipt
-			}
-		}
+		return { transactionHash, waitForReceipt: () => this.waitForReceipt(transactionHash) }
 	}
 }
 
@@ -356,35 +347,29 @@ export class EthereumClientLedger extends EthereumClient {
 	public override readonly request = async (request: EthereumRequest) => await this.underlyingClient.request(request)
 
 	public override readonly sendTransaction = async (...[transaction]: EthSendTransactionParameters): ReturnType<EthereumClient['sendTransaction']> => {
-		const nonce = await this.getTransactionCount(this.address, 'latest')
-		const gasLimit = await this.estimateGas(transaction, 'latest')
-		const chainId = await this.chainId()
+		const balance = this.getBalance(this.address, 'latest')
+		const nonce = transaction.nonce || this.getTransactionCount(this.address, 'latest')
+		const gasLimit = transaction.gas || this.estimateGas(transaction, 'latest')
+		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(async baseFee => ((baseFee * 2n * await gasLimit + value) > await balance) ? ((await balance - value) / await gasLimit) : baseFee * 2n)
+		const chainId = transaction.chainId || this.chainId()
+		const value = transaction.value || 0n
 		const unsignedUnencodedTransaction = {
 			type: '1559',
-			chainId,
-			nonce,
-			maxFeePerGas: 100n * 10n**9n,
-			maxPriorityFeePerGas: 10n**8n,
-			gasLimit,
+			chainId: await chainId,
+			nonce: await nonce,
+			maxFeePerGas: await maxFeePerGas,
+			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n > await maxFeePerGas ? await maxFeePerGas : 10n**8n,
+			gasLimit: await gasLimit,
 			to: transaction.to || null,
-			value: transaction.value || 0n,
+			value,
 			data: transaction.data || new Uint8Array(0),
 			accessList: [],
 		} as const
-		const unsignedEncodedTransaction = await encodeTransaction(unsignedUnencodedTransaction)
+		const unsignedEncodedTransaction = encodeTransaction(unsignedUnencodedTransaction)
 		const signature = await signTransactionWithLedger(unsignedEncodedTransaction, this.derivationPath)
 		const encodedTransaction = encodeTransaction({ ...unsignedUnencodedTransaction, yParity: signature.v, r: signature.r, s: signature.s })
 		const transactionHash = await this.sendRawTransaction(encodedTransaction)
-		return {
-			transactionHash,
-			waitForReceipt: async () => {
-				let receipt: ResolvePromise<ReturnType<typeof this.getTransactionReceipt>>
-				do {
-					receipt = await this.getTransactionReceipt(transactionHash)
-				} while (receipt === null)
-				return receipt
-			}
-		}
+		return { transactionHash, waitForReceipt: () => this.waitForReceipt(transactionHash) }
 	}
 }
 

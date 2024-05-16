@@ -90,7 +90,7 @@ function Recovery(model: {
 		const [Recoverer_] = useState(() => ({recoverer}: {recoverer: DelayModuleClient}) => {
 			const remainingSeconds = useOptionalSignal<bigint>(undefined)
 			const asyncRemainingSeconds = useAsyncComputed(() => recoverer.getRemainingCooldown(), { onRejected: model.noticeError, onResolved: x => remainingSeconds.deepValue = x })
-			const [DaysRemaining_] = useState(() => () => <>{Number(recoverer.cooldown * 100n / 60n / 60n / 24n) / 100} Days - </>)
+			const [CooldownDays_] = useState(() => () => <>{Number(recoverer.cooldown * 100n / 60n / 60n / 24n) / 100} Days - </>)
 			const [Address_] = useState(() => () => <code>{addressBigintToHex(recoverer.recovererAddress)}</code>)
 			const [RemoveButton_] = useState(() => () => {
 				const safeClient = model.safeClient.value
@@ -104,7 +104,7 @@ function Recovery(model: {
 				}
 			})
 			const [StartButton_] = useState(() => () => {
-				if (!recoverer.owned) return <></>
+				if (recoverer.owned !== 'recoverer') return <></>
 				const { value, waitFor } = useAsyncState<void>().onRejected(model.noticeError).onResolved(refresh)
 				switch (asyncRemainingSeconds.value.state) {
 					case 'pending': return <Spinner/>
@@ -119,19 +119,40 @@ function Recovery(model: {
 					}
 				}
 			})
+			const [CompleteButton_] = useState(() => () => {
+				if (recoverer.owned !== 'recoverer') return <></>
+				const { value, waitFor } = useAsyncState().onRejected(model.noticeError).onResolved(refresh)
+				switch (value.value.state) {
+					case 'inactive': return <button onClick={() => waitFor(recoverer.executeRecoverey)}>Execute</button>
+					case 'pending': return <Spinner/>
+					case 'rejected': return <>⚠️</>
+					case 'resolved': return <>🎉</>
+				}
+			})
+			const [CancelButton_] = useState(() => () => {
+				if (recoverer.owned !== 'safe') return <></>
+				const { value, waitFor } = useAsyncState().onRejected(model.noticeError).onResolved(refresh)
+				switch (value.value.state) {
+					case 'inactive': return <button onClick={() => waitFor(recoverer.cancelRecovery)}>Cancel</button>
+					case 'pending': return <Spinner/>
+					case 'rejected': return <>⚠️</>
+					case 'resolved': return <>🎉</>
+				}
+			})
 			const [MaybeRecoveryInitiated_] = useState(() => () => {
 				switch (asyncRemainingSeconds.value.state) {
 					case 'pending': return <Spinner/>
 					case 'rejected': return <>⚠️</>
 					case 'resolved': {
 						if (remainingSeconds.value === undefined) return <span style={{ fontSize: 'small', lineHeight: '1em' }}>↳ Recovery not initiated.</span>
+						else if (remainingSeconds.value.value > 0) return <span>↳ ⚠️Recovery initiated!⚠️ <Countdown seconds={remainingSeconds.value}/> remaining until account is recovered.</span>
 						// TODO: add button to execute recoverey if cooldown remaining is 0
-						else return <span>↳ ⚠️Recovery initiated!⚠️ <Countdown seconds={remainingSeconds.value}/> remaining until account is recovered.</span>
+						else return <span>↳ ❗Recovery Delay Complete!❗<CompleteButton_/><CancelButton_/></span>
 					}
 				}
 			})
 			return <div style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-				<span><span><DaysRemaining_/><Address_/></span><RemoveButton_/><StartButton_/></span>
+				<span><span><CooldownDays_/><Address_/></span><RemoveButton_/><StartButton_/></span>
 				<MaybeRecoveryInitiated_/>
 			</div>
 		})
