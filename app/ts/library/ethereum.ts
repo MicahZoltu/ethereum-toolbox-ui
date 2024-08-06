@@ -17,10 +17,12 @@ export type Wallet = {
 	readonly readonly: true
 	readonly ethereumClient: IEthereumClient
 	readonly address: bigint
+	readonly isGasPayer: boolean
 } | {
 	readonly readonly: false
 	readonly ethereumClient: IEthereumClient
 	readonly address: bigint
+	readonly isGasPayer: boolean
 }
 
 export type IProvider = {

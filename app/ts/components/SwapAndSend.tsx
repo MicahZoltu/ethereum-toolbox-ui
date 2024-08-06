@@ -227,8 +227,8 @@ function SwapButton(model: SwapButtonModel) {
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
 			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
 			if (model.route.deepValue.source.symbol === 'ETH' && model.route.deepValue.target.symbol === 'ETH') {
-				if (model.route.deepValue.amountIn === await wallet.ethereumClient.getBalance(wallet.address, 'latest')) {
-					// special case for sweeping
+				// special case for sweeping when sending all ETH from gas-paying account
+				if (wallet.isGasPayer && model.route.deepValue.amountIn === await wallet.ethereumClient.getBalance(wallet.address, 'latest')) {
 					const baseFee = await wallet.ethereumClient.getBaseFee('latest')
 					const maxFeePerGas = baseFee * 2n
 					const transaction = {

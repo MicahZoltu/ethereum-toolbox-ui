@@ -51,7 +51,7 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 			model.wallet.deepValue = undefined
 		} else {
 			maybeEthereumClient.deepValue.address = maybeAddress.deepValue
-			model.wallet.deepValue = { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue }
+			model.wallet.deepValue = { readonly: true, ethereumClient: maybeEthereumClient.deepValue, address: maybeAddress.deepValue, isGasPayer: false }
 		}
 	})
 	if (maybeEthereumClient.deepValue === undefined) {
@@ -94,6 +94,7 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 		model.wallet.deepValue = {
 			ethereumClient,
 			address: maybeAddress.deepValue,
+			isGasPayer: false,
 			...underlyingWallet.deepValue.readonly ? {
 				readonly: true
 			} : {
@@ -184,6 +185,7 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 		model.wallet.deepValue = {
 			ethereumClient,
 			address,
+			isGasPayer: false,
 			...underlyingWallet.readonly ? {
 				readonly: true
 			} : {
@@ -260,7 +262,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 		} else {
 			const address = asyncAddress.value.value
 			ethereumClient.address = address
-			model.wallet.deepValue = { readonly: false, ethereumClient, address }
+			model.wallet.deepValue = { readonly: false, ethereumClient, address, isGasPayer: true }
 		}
 	})
 	const requestAccounts = () => waitForAccount(async () => {
@@ -328,7 +330,7 @@ function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 				if (derivationPath === undefined) throw new Error(`Derivation path required.`)
 				const address = await getAddressFromLedger(derivationPath)
 				const ethereumClient = new EthereumClientLedger(ethereumClientRpc, derivationPath, address)
-				model.wallet.deepValue = { address, ethereumClient, readonly: false }
+				model.wallet.deepValue = { address, ethereumClient, readonly: false, isGasPayer: true }
 			})
 		}
 		return <div><DerivationPathPicker value={maybeDerivationPath}/><button onClick={onClick} disabled={maybeDerivationPath.deepValue === undefined}>Next</button></div>
@@ -366,7 +368,7 @@ function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 		} else {
 			const address = getAddressFromPrivateKey(privateKey)
 			const ethereumClient = maybeEthereumClientMemory.deepValue = new EthereumClientMemory(ethereumClientRpc, privateKey, address)
-			model.wallet.deepValue = ({ readonly: false, address, ethereumClient })
+			model.wallet.deepValue = ({ readonly: false, address, ethereumClient, isGasPayer: true })
 		}
 	})
 	const [ChangeAccountButton_] = useState(() => () => <button onClick={() => { maybeEthereumClientRpc.value = maybePrivateKey.value = undefined }} style={{ marginLeft: 'auto' }}>Change Wallet</button>)
