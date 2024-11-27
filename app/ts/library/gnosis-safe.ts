@@ -99,13 +99,6 @@ export async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, 
 		}, 'latest')
 		return addressHexToBigint(delayModuleContract.avatar.decodeOutput(result))
 	}
-	async function getOwner() {
-		const result = await ethereumClient.call({
-			to: delayModuleAddress,
-			data: delayModuleContract.owner.encodeInput({}),
-		}, 'latest')
-		return addressHexToBigint(delayModuleContract.owner.decodeOutput(result))
-	}
 	async function getNonce() {
 		const result = await ethereumClient.call({
 			to: delayModuleAddress,
@@ -149,27 +142,35 @@ export async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, 
 	//
 	// Write Functions
 	//
-	async function queueRecovery() {
+	async function queueRecovery(recovererAddress: bigint) {
 		const result = await ethereumClient.sendTransaction({
 			to: delayModuleAddress,
 			data: delayModuleContract.execTransactionFromModule.encodeInput({
 				operation: 0n, // CALL
 				to: addressBigintToHex(await getSafe()),
 				value: 0n,
-				data: safeContract.addOwnerWithThreshold.encodeInput({ owner: addressBigintToHex(await getOwner()), _threshold: 1n }),
+				data: safeContract.addOwnerWithThreshold.encodeInput({ owner: addressBigintToHex(recovererAddress), _threshold: 1n }),
 			})
 		})
 		await result.waitForReceipt()
 	}
-	async function executeRecoverey() {
+	async function executeRecoverey(recovererAddress: bigint) {
 		const result = await ethereumClient.sendTransaction({
 			to: delayModuleAddress,
 			data: delayModuleContract.executeNextTx.encodeInput({
 				operation: 0n, // CALL
 				to: addressBigintToHex(await getSafe()),
 				value: 0n,
-				data: safeContract.addOwnerWithThreshold.encodeInput({ owner: addressBigintToHex(await getOwner()), _threshold: 1n }),
+				data: safeContract.addOwnerWithThreshold.encodeInput({ owner: addressBigintToHex(recovererAddress), _threshold: 1n }),
 			})
+		})
+		await result.waitForReceipt()
+	}
+
+	async function cancelRecovery() {
+		const result = await ethereumClient.sendTransaction({
+			to: delayModuleAddress,
+			data: delayModuleContract.setTxNonce.encodeInput(await getQueuedNonce()),
 		})
 		await result.waitForReceipt()
 	}
@@ -183,17 +184,19 @@ export async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, 
 		if (safeAddress !== await getSafePromise) throw new Error(`This module points at a different safe.`)
 		// TODO: check additional stuff to verify this is a Delay Module and not something else
 		return modules.map(recovererAddress => {
-			const client = { owned: false, moduleAddress: delayModuleAddress, recovererAddress, safeAddress, cooldown, hasQueuedTransaction, getRemainingCooldown } as const
-			if (ethereumClient.address !== recovererAddress) return client
-			else return { ...client, owned: true, queueRecovery, executeRecoverey } as const
+			const client = { moduleAddress: delayModuleAddress, recovererAddress, safeAddress, cooldown, hasQueuedTransaction, getRemainingCooldown } as const
+			if (ethereumClient.address === safeAddress) return { ...client, owned: 'safe' as const, cancelRecovery }
+			else if (ethereumClient.address === recovererAddress) return { ...client, owned: 'recoverer' as const, queueRecovery: () => queueRecovery(recovererAddress), executeRecoverey: () => executeRecoverey(recovererAddress) } as const
+			else return { ...client, owned: 'none' as const }
 		})
 	} catch {
 		return []
 	}
 }
-export type OwnedDelayModuleClient = PermitUnion<ResolvePromise<ReturnType<typeof tryGetDelayModuleClients>>[number], { owned: true }>
-export type UnownedDelayModuleClient = PermitUnion<ResolvePromise<ReturnType<typeof tryGetDelayModuleClients>>[number], { owned: false }>
-export type DelayModuleClient = OwnedDelayModuleClient | UnownedDelayModuleClient
+export type RecovererOwnedDelayModuleClient = PermitUnion<ResolvePromise<ReturnType<typeof tryGetDelayModuleClients>>[number], { owned: 'recoverer' }>
+export type SafeOwnedDelayModuleClient = PermitUnion<ResolvePromise<ReturnType<typeof tryGetDelayModuleClients>>[number], { owned: 'safe' }>
+export type UnownedDelayModuleClient = PermitUnion<ResolvePromise<ReturnType<typeof tryGetDelayModuleClients>>[number], { owned: 'none' }>
+export type DelayModuleClient = RecovererOwnedDelayModuleClient | SafeOwnedDelayModuleClient | UnownedDelayModuleClient
 
 export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress: bigint) {
 	// Read Functions

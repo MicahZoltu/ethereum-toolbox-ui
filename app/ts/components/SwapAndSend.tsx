@@ -1,13 +1,13 @@
-import { ReadonlySignal, Signal, batch, useSignal, useSignalEffect } from '@preact/signals'
+import { ReadonlySignal, Signal, batch, useSignal } from '@preact/signals'
 import { addressBigintToHex, bigintToHex } from '@zoltu/ethereum-transactions/converters.js'
 import { contract } from 'micro-web3'
 import { ERC20, WETH, WETH_CONTRACT } from 'micro-web3/contracts/index.js'
 import { useState } from 'preact/hooks'
 import { JSX } from 'preact/jsx-runtime'
 import { savedWallets } from '../library/addresses.js'
-import { QUOTER_ABI, ROUTER_ABI, UNISWAP_QUOTER_ADDRESS, UNISWAP_ROUTER_ADDRESS } from '../library/contract-details.js'
+import { ERC20_ABI, QUOTER_ABI, ROUTER_ABI, UNISWAP_QUOTER_ADDRESS, UNISWAP_ROUTER_ADDRESS } from '../library/contract-details.js'
 import { Wallet, toMicroWeb3 } from '../library/ethereum.js'
-import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
+import { OptionalSignal, useAsyncComputed, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
 import { AssetDetails, ETH_DETAILS, WETH_DETAILS } from '../library/tokens.js'
 import { ResolvePromise } from '../library/typescript.js'
 import { errorAsString } from '../library/utilities.js'
@@ -19,6 +19,7 @@ import { Spinner } from './Spinner.js'
 import { TokenAndAmount } from './TokenAndAmount.js'
 
 type Route = { userSpecifiedValue: 'source' | 'target', source: AssetDetails, target: AssetDetails, amountIn: bigint, amountOut: bigint, fee: bigint }
+const erc20 = contract(ERC20_ABI)
 
 export type SwapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
@@ -188,85 +189,99 @@ function SwapButton(model: SwapButtonModel) {
 	if (model.targetToken.value !== model.route.deepValue.target) return <DisabledSwapButton_ red/>
 	if (model.userSpecifiedValue.deepValue !== model.route.deepValue.userSpecifiedValue) return <DisabledSwapButton_ red/>
 
-	const { value: sendResult, waitFor: waitForSend, reset: _resetSend } = useAsyncState<EthTransactionReceiptResult>()
-	// propogate errors up the chain for rendering in some error rendering system
-	useSignalEffect(() => { sendResult.value.state === 'rejected' && model.noticeError(sendResult.value.error) })
+	const { value: sendResult, waitFor: waitForSend, reset: _resetSend } = useAsyncState<EthTransactionReceiptResult>().onRejected(model.noticeError)
+	const needsApproval = useAsyncComputed(async () => {
+		if (model.route.deepValue === undefined) return false
+		if (model.route.deepValue.source.symbol === 'ETH') return false
+		const allowanceResult = await model.wallet.value.ethereumClient.call({
+			to: getTokenOrWethAddress(model.sourceToken.value),
+			data: erc20.allowance.encodeInput({ owner: addressBigintToHex(model.wallet.value.address), spender: addressBigintToHex(UNISWAP_ROUTER_ADDRESS) })
+		}, 'latest')
+		const allowance = erc20.allowance.decodeOutput(allowanceResult)
+		if (allowance >= model.route.deepValue.amountIn) return false
+		return true
+	}, { onRejected: model.noticeError })
 
 	const onClick = () => {
 		waitForSend(async () => {
 			// in an abundance of caution, validate UI matches route once again and capture variables so nothing can change out from under us mid-processing
 			const wallet = model.wallet.value
-			const route = model.route.deepValue
-			const recipient = model.recipient.deepValue
 			if (wallet.readonly) throw new Error(`Readonly wallet.`)
-			if (route === undefined) throw new Error(`Undefined route.`)
-			if (recipient === undefined) throw new Error(`Undefined recipient.`)
-			if (model.sourceAmount.deepValue !== route.amountIn) throw new Error(`Route amountIn doesn't match sourceAmount.`)
-			if (model.targetAmount.deepValue !== route.amountOut) throw new Error(`Route amountOut doesn't match targetAmount.`)
-			if (model.sourceToken.value !== route.source) throw new Error(`Route source doesn't match sourceToken.`)
-			if (model.targetToken.value !== route.target) throw new Error(`Route target doesn't match targetToken.`)
-			if (model.userSpecifiedValue.deepValue !== route.userSpecifiedValue) throw new Error(`Route userSpecifiedValue doesn't match userSpecifiedValue.`)
-	
+			if (model.route.deepValue === undefined) throw new Error(`Undefined route.`)
+			if (model.recipient.deepValue === undefined) throw new Error(`Undefined recipient.`)
+			if (model.sourceAmount.deepValue !== model.route.deepValue.amountIn) throw new Error(`Route amountIn doesn't match sourceAmount.`)
+			if (model.targetAmount.deepValue !== model.route.deepValue.amountOut) throw new Error(`Route amountOut doesn't match targetAmount.`)
+			if (model.sourceToken.value !== model.route.deepValue.source) throw new Error(`Route source doesn't match sourceToken.`)
+			if (model.targetToken.value !== model.route.deepValue.target) throw new Error(`Route target doesn't match targetToken.`)
+			if (model.userSpecifiedValue.deepValue !== model.route.deepValue.userSpecifiedValue) throw new Error(`Route userSpecifiedValue doesn't match userSpecifiedValue.`)
+			if (needsApproval.value.state !== 'resolved') throw new Error(`Button clicked before approval needs discovered.`)
+
 			const deadline = BigInt(Math.round(Date.now() / 1000)) + 10n ** 60n
-			const amountIn = route.amountIn
-			const amountOut = route.amountOut
-			const fee = route.fee
-			const recipientString = addressBigintToHex(recipient)
+			const amountIn = model.route.deepValue.amountIn
+			const amountOut = model.route.deepValue.amountOut
+			const fee = model.route.deepValue.fee
+			const recipientString = addressBigintToHex(model.recipient.deepValue)
 
 			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
 			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_ROUTER_ADDRESS))
 			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
 			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
-			if (route.source.symbol === 'ETH' && route.target.symbol === 'ETH') {
-				if (route.amountIn === await wallet.ethereumClient.getBalance(wallet.address, 'latest')) {
-					// special case for sweeping
+			if (model.route.deepValue.source.symbol === 'ETH' && model.route.deepValue.target.symbol === 'ETH') {
+				// special case for sweeping when sending all ETH from gas-paying account
+				if (wallet.isGasPayer && model.route.deepValue.amountIn === await wallet.ethereumClient.getBalance(wallet.address, 'latest')) {
 					const baseFee = await wallet.ethereumClient.getBaseFee('latest')
 					const maxFeePerGas = baseFee * 2n
 					const transaction = {
-						to: recipient,
+						to: model.recipient.deepValue,
 						value: 1n, // smallest amount possible for gas estimation (hopefully results don't differ by amount)
 						data: new Uint8Array(0),
 					} as const
 					const gasLimit = await wallet.ethereumClient.estimateGas(transaction, 'latest')
-					const value = route.amountIn - gasLimit * maxFeePerGas
+					const value = model.route.deepValue.amountIn - gasLimit * maxFeePerGas
 					sendTransactionResult = await wallet.ethereumClient.sendTransaction({ ...transaction, value, gas: gasLimit, maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas })
 				} else {
 					// special case for simple ETH transfers
 					sendTransactionResult = await wallet.ethereumClient.sendTransaction({
-						to: recipient,
-						value: route.amountIn,
+						to: model.recipient.deepValue,
+						value: model.route.deepValue.amountIn,
 						data: new Uint8Array(0),
 					})
 				}
-			} else if (route.source === route.target && typeof route.source.address === 'bigint') {
+			} else if (model.route.deepValue.source === model.route.deepValue.target && typeof model.route.deepValue.source.address === 'bigint') {
 				// special case for simple token transfers
-				const tokenAddress = route.source.address
+				const tokenAddress = model.route.deepValue.source.address
 				const token = contract(ERC20, microWeb3Provider, addressBigintToHex(tokenAddress))
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: tokenAddress,
 					value: 0n,
-					data: token.transfer.encodeInput({ to: addressBigintToHex(recipient), value: route.amountIn }),
+					data: token.transfer.encodeInput({ to: addressBigintToHex(model.recipient.deepValue), value: model.route.deepValue.amountIn }),
 				})
-			} else if (route.source.symbol === 'ETH' && route.target.symbol === 'WETH') {
+			} else if (model.route.deepValue.source.symbol === 'ETH' && model.route.deepValue.target.symbol === 'WETH') {
 				// special case for wrapping WETH
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: WETH_DETAILS.address,
-					value: route.amountIn,
+					value: model.route.deepValue.amountIn,
 					data: weth.deposit.encodeInput({}),
 				})
-			} else if (route.source.symbol === 'WETH' && route.target.symbol === 'ETH') {
+			} else if (model.route.deepValue.source.symbol === 'WETH' && model.route.deepValue.target.symbol === 'ETH') {
 				// special case for unwrapping ETH
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: 0n,
-					data: weth.withdraw.encodeInput(route.amountIn)
+					data: weth.withdraw.encodeInput(model.route.deepValue.amountIn)
+				})
+			} else if (model.route.deepValue.source.symbol !== 'ETH' && needsApproval.value.value) {
+				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
+					to: getTokenOrWethAddress(model.route.deepValue.source),
+					value: 0n,
+					data: erc20.approve.encodeInput({ spender: addressBigintToHex(UNISWAP_ROUTER_ADDRESS), amount: model.route.deepValue.amountIn })
 				})
 			} else {
 				// swap and send
-				const tokenIn = getTokenOrWethAddressString(route.source)
-				const tokenOut = getTokenOrWethAddressString(route.target)
+				const tokenIn = getTokenOrWethAddressString(model.route.deepValue.source)
+				const tokenOut = getTokenOrWethAddressString(model.route.deepValue.target)
 				const transactions = [
-					route.userSpecifiedValue === 'source'
+					model.route.deepValue.userSpecifiedValue === 'source'
 						? router.exactInputSingle.encodeInput({ tokenIn, tokenOut, amountIn, amountOutMinimum: amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n })
 						: router.exactOutputSingle.encodeInput({ tokenIn, tokenOut, amountInMaximum: amountIn, amountOut, fee, recipient: recipientString, sqrtPriceLimitX96: 0n }),
 					// TODO: figure out under what conditions each of these are actually necessary
@@ -278,7 +293,7 @@ function SwapButton(model: SwapButtonModel) {
 				const transaction = router.multicall.encodeInput({ deadline, data: transactions })
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: UNISWAP_ROUTER_ADDRESS,
-					value: route.source.symbol === 'ETH' ? route.amountIn : 0n,
+					value: model.route.deepValue.source.symbol === 'ETH' ? model.route.deepValue.amountIn : 0n,
 					data: transaction,
 				})
 			}
@@ -293,33 +308,39 @@ function SwapButton(model: SwapButtonModel) {
 	}
 
 	const [SwapButton_] = useState(() => () => {
-		const text = model.recipient.deepValue === 0n
-			? 'Burn'
-			: model.sourceToken.value === model.targetToken.value
-				? model.recipient.deepValue === model.wallet.value.address
-					? 'Self Send'
-					: 'Send'
-				: model.sourceToken.value.symbol === 'ETH' && model.targetToken.value.symbol === 'WETH'
-					? model.recipient.deepValue === model.wallet.value.address
-						? 'Wrap'
-						: 'Wrap and Send'
-					: model.sourceToken.value.symbol === 'WETH' && model.targetToken.value.symbol === 'ETH'
-						? model.recipient.deepValue === model.wallet.value.address
-							? 'Unwap'
-							: 'Unwrap and Send'
-						: model.recipient.deepValue === model.wallet.value.address
-							? 'Swap'
-							: 'Swap and Send'
+		function getButtonText() {
+			if (model.recipient.deepValue === 0n) return 'Burn'
+			if (model.sourceToken.value === model.targetToken.value) {
+				if (model.recipient.deepValue === model.wallet.value.address) return 'Self Send'
+				else return 'Send'
+			}
+			if (model.sourceToken.value.symbol === 'ETH' && model.targetToken.value.symbol === 'WETH') {
+				if (model.recipient.deepValue === model.wallet.value.address) return 'Wrap'
+				else return 'Wrap and Send'
+			}
+			if (model.sourceToken.value.symbol === 'WETH' && model.targetToken.value.symbol === 'ETH') {
+				if (model.recipient.deepValue === model.wallet.value.address) return 'Unwrap'
+				else return 'Unwrap and Send'
+			}
+			if (needsApproval.value.state === 'resolved' && needsApproval.value.value) return 'Approve'
+			if (model.recipient.deepValue === model.wallet.value.address) return 'Swap'
+			else return 'Swap and Send'
+		}
+		const text = getButtonText()
 		const disabled = model.recipient.deepValue !== model.wallet.value.address && ((model.sourceToken.value.symbol === 'ETH' && model.targetToken.value.symbol === 'WETH') || (model.sourceToken.value.symbol === 'WETH' && model.targetToken.value.symbol === 'ETH'))
 		return <button onClick={onClick} disabled={disabled}>{text}</button>
 	})
-	return sendResult.value.state === 'pending'
+	return sendResult.value.state === 'pending' || needsApproval.value.state === 'pending'
 		? <Spinner/>
 		: <SwapButton_/>
 }
 
-function getTokenOrWethAddressString(asset: AssetDetails): string {
-	return addressBigintToHex(asset.symbol === 'ETH'
+function getTokenOrWethAddress(asset: AssetDetails): bigint {
+	return asset.symbol === 'ETH'
 		? WETH_DETAILS.address
-		: asset.address as bigint)
+		: asset.address as bigint
+}
+
+function getTokenOrWethAddressString(asset: AssetDetails): string {
+	return addressBigintToHex(getTokenOrWethAddress(asset))
 }
