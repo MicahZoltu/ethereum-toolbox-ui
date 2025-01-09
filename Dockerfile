@@ -1,4 +1,4 @@
-FROM node:21.7.2-alpine3.18@sha256:d3398787ac2f4d83206293be6b41371a628383eadaf7fb108faab63d13c5469e as builder
+FROM node:22.13.0-alpine3.20@sha256:2e897832d17a0670bb7ef7c2b4df7f2e6c3d561b5aaa2be89ff4bc12fb698e67 as builder
 
 RUN apk add --no-cache git
 
@@ -17,14 +17,15 @@ RUN npm run setup
 # --------------------------------------------------------
 
 # Cache the kubo image
-FROM ipfs/kubo:v0.27.0@sha256:bfce363b878b8e1512009d9bb5b732b6bc8469296ca50f75ff3c6f227dc179b2 as ipfs-kubo
+FROM ipfs/kubo:v0.32.1@sha256:7cc0e0de8f845d6c9fa1dce414c069974c34ed3cd3742e0d4f5bccda4adc376d as ipfs-kubo
 
 # Create the base image
-FROM debian:12.2-slim@sha256:93ff361288a7c365614a5791efa3633ce4224542afb6b53a1790330a8e52fc7d
+FROM debian:12.8-slim@sha256:d365f4920711a9074c4bcd178e8f457ee59250426441ab2a5f8106ed8fe948eb
 
-# Add curl to the base image (7.88.1-10+deb12u5)
-# Add jq to the base image (1.6-2.1)
-RUN apt-get update && apt-get install -y curl=7.88.1-10+deb12u5 jq=1.6-2.1
+# Use snapshot repository and add curl & jq packages.
+RUN sed -i 's/URIs/# URIs/g' /etc/apt/sources.list.d/debian.sources && \
+	sed -i 's/# http/URIs: http/g' /etc/apt/sources.list.d/debian.sources && \
+	apt-get update -o Acquire::Check-Valid-Until=false && apt-get install -y curl=7.88.1-10+deb12u8 jq=1.6-2.1
 
 # Install kubo and initialize ipfs
 COPY --from=ipfs-kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
