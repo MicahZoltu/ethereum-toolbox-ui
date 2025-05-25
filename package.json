@@ -7,6 +7,7 @@
 	"devDependencies": {
 		"@types/node": "20.1.0",
 		"@zoltu/file-copier": "3.0.0",
+		"better-typescript-lib": "2.10.0",
 		"typescript": "5.0.4"
 	},
 	"dependencies": {
@@ -26,7 +27,7 @@
 		"setup": "npm ci --ignore-scripts && tsc && npm run vendor",
 		"build": "tsc",
 		"watch": "tsc --watch",
-		"serve": "npx http-server --cors --gzip --port 57936 ./app",
+		"serve": "npx http-server --cors --gzip --port 12345 ./app",
 		"vendor": "tsc --project tsconfig.vendor.json && node --enable-source-maps ./build/vendor.mjs && node --input-type=module -e \"import { promises as fs } from 'fs'; await fs.rm('./build/vendor.mjs')\""
 	}
 }
