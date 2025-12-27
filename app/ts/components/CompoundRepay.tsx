@@ -20,7 +20,7 @@ const CETH_ABI = [{"constant":false,"inputs":[{"name":"account","type":"address"
 
 export type CompoundRepayModel = {
 	readonly wallet: ReadonlySignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -58,7 +58,7 @@ type CompoundDebt = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrower: Signal<bigint>
 	readonly debtInAttoeth: OptionalSignal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }
 function CompoundDebt(model: CompoundDebt) {
 	const { value: debtAmount, waitFor: waitForDebtAmount } = useAsyncState<bigint>()
@@ -83,7 +83,7 @@ type PayDebtButtonModel = {
 	readonly wallet: Signal<Wallet>
 	readonly debtorAddress: ReadonlySignal<bigint>
 	readonly amountToRepay: ReadonlySignal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly sendComplete: () => void
 }
 function PayDebtButton(model: PayDebtButtonModel) {

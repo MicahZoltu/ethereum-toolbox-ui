@@ -9,7 +9,7 @@ import { Spacer } from "./Spacer.js";
 
 export interface RpcChooserModel {
 	readonly ethereumClient: OptionalSignal<IEthereumClient>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly class?: JSX.HTMLAttributes['class']
 	readonly style?: JSX.CSSProperties
 }
