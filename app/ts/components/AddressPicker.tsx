@@ -22,9 +22,7 @@ export function AddressPicker(model: AddressPickerModel) {
 	const tryParse = (input: string) => ({ ok: true, value: isAddressRegexp.test(input) ? BigInt(input) : undefined } as const)
 	const serialize = (input: bigint | undefined) => input === undefined ? '' : addressBigintToHex(input)
 	const extraOptions = ((model.extraOptions instanceof Signal ? model.extraOptions.value : model.extraOptions) || []).map(x => x instanceof Signal ? x.value : x)
-	// run through `Set` to make unique
-	const datalist = [...new Set([
-		...extraOptions
-	])].sort((a,b) => Number(a-b)).map(addressBigintToHex)
+	// use Set to remove duplicate entries while retaining order
+	const datalist = [...new Set([...extraOptions])].map(addressBigintToHex)
 	return <AutosizingInput required={model.required} value={model.address} sanitize={sanitize} tryParse={tryParse} serialize={serialize} dataList={datalist} placeholder={datalist[0] || '0x0000000000000000000000000000000000000000'}/>
 }
