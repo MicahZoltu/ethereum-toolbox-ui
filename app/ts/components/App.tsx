@@ -11,6 +11,7 @@ import { CompoundRepay } from './CompoundRepay.js'
 import { GnosisSafe } from './GnosisSafe.js'
 import { SwapAndSend } from './SwapAndSend.js'
 import { WalletChooser } from './WalletChooser.js'
+import { DepositIntoVault, WithdrawFromVault } from './Yearn.js'
 
 export interface AppModel {
 }
@@ -41,6 +42,11 @@ export function Apps(model: { wallet: ReadonlySignal<Wallet>, noticeError: (erro
 			<h1>Compound</h1>
 			<CompoundBorrow wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 			<CompoundRepay wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
+		</div>
+		<div class='widget'>
+			<h1>Yearn</h1>
+			<DepositIntoVault wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
+			<WithdrawFromVault wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 		</div>
 		<GnosisSafe wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 	</>
