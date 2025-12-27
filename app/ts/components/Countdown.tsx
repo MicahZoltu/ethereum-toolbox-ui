@@ -7,7 +7,7 @@ export function Countdown(model: {
 	function now() { return BigInt(Math.round(Date.now() / 1000)) }
 	const endSecondsSinceEpoch = useComputed(() => now() + (model.seconds instanceof Signal ? model.seconds.value : model.seconds))
 	const nowSecondsSinceEpoch = useSignal(now())
-	useEffect(() => clearInterval.bind(undefined, setInterval(() => nowSecondsSinceEpoch.value = now(), 1000), []))
+	useEffect(() => clearInterval.bind(undefined, setInterval(() => nowSecondsSinceEpoch.value = now(), 1000)), [])
 	const remainingSeconds = useComputed(() => endSecondsSinceEpoch.value - nowSecondsSinceEpoch.value)
 
 	const yearsRemaining = useComputed(() => remainingSeconds.value / 60n / 60n / 24n / 7n / 52n)
