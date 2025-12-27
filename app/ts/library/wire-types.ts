@@ -292,25 +292,25 @@ export const EthereumUnsignedTransaction = t.Union(EthereumUnsignedTransaction15
 
 export type EthereumBlockHeader = t.Static<typeof EthereumBlockHeader>
 export const EthereumBlockHeader = t.ReadonlyObject({
-	difficulty: EthereumQuantity,
-	extraData: EthereumData,
-	gasLimit: EthereumQuantity,
-	gasUsed: EthereumQuantity,
-	hash: EthereumBytes32,
-	logsBloom: EthereumBytes256,
-	miner: EthereumAddress,
-	mixHash: EthereumBytes32,
-	nonce: EthereumQuantity,
-	number: EthereumQuantity,
-	parentHash: EthereumBytes32,
-	receiptsRoot: EthereumBytes32,
-	sha3Uncles: EthereumBytes32,
-	stateRoot: EthereumBytes32,
-	timestamp: TimestampSeconds,
-	size: EthereumQuantity,
-	totalDifficulty: EthereumQuantity,
+	// difficulty: EthereumQuantity,
+	// extraData: EthereumData,
+	// gasLimit: EthereumQuantity,
+	// gasUsed: EthereumQuantity,
+	// hash: EthereumBytes32,
+	// logsBloom: EthereumBytes256,
+	// miner: EthereumAddress,
+	// mixHash: EthereumBytes32,
+	// nonce: EthereumQuantity,
+	// number: EthereumQuantity,
+	// parentHash: EthereumBytes32,
+	// receiptsRoot: EthereumBytes32,
+	// sha3Uncles: EthereumBytes32,
+	// stateRoot: EthereumBytes32,
+	// timestamp: TimestampSeconds,
+	// size: EthereumQuantity,
+	// totalDifficulty: EthereumQuantity,
 	baseFeePerGas: EthereumQuantity,
-	transactionsRoot: EthereumBytes32
+	// transactionsRoot: EthereumBytes32
 })
 
 export type EthereumBlockHeaderWithTransactionHashes = t.Static<typeof EthereumBlockHeaderWithTransactionHashes>
