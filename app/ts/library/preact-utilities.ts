@@ -104,7 +104,7 @@ export function useAsyncComputed<T>(compute: () => Promise<T>, callbacks?: Callb
 
 export type RefreshableAsyncState<T> = {
 	value: ReadonlySignal<OmitUnion<AsyncProperty<T>, { state: 'inactive' }>>
-	refresh: () => unknown,
+	refresh: () => void,
 	onPending: (callback: () => unknown) => RefreshableAsyncState<T>
 	onResolved: (callback: (value: T) => unknown) => RefreshableAsyncState<T>
 	onRejected: (callback: (error: Error) => unknown) => RefreshableAsyncState<T>

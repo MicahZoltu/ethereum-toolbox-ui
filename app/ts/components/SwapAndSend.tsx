@@ -23,7 +23,7 @@ const erc20 = contract(ERC20_ABI)
 
 export type SwapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -175,7 +175,7 @@ type SwapButtonModel = {
 	readonly targetToken: Signal<AssetDetails>
 	readonly sourceAmount: OptionalSignal<bigint>
 	readonly targetAmount: OptionalSignal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }
 function SwapButton(model: SwapButtonModel) {
 	if (model.wallet.value.readonly) return <></>

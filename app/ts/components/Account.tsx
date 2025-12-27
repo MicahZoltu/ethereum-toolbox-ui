@@ -7,7 +7,7 @@ import { Spinner } from "./Spinner.js"
 
 export function AccountDetails(model: {
 	readonly wallet: ReadonlySignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }) {

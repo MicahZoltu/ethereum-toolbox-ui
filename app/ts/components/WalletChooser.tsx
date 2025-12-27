@@ -20,7 +20,7 @@ import { Spinner } from './Spinner.js'
 
 export interface WalletChooserModel {
 	readonly wallet: OptionalSignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -43,7 +43,7 @@ export function WalletChooser(model: WalletChooserModel) {
 	</div>
 }
 
-function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const maybeEthereumClient = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -82,7 +82,7 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 	}
 }
 
-function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -162,7 +162,7 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 	</div>
 }
 
-function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const maybeUnderlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	const suggestedSafes = useAsyncState<bigint[]>(undefined, { onRejected: model.noticeError })
@@ -249,7 +249,7 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 	</div>
 }
 
-function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const ethereumClientSignal = useOptionalSignal(EthereumClientWindow.tryCreate())
 	const ethereumClient = ethereumClientSignal.deepValue
 	if (!ethereumClient) return <>No browser wallet detected.</>
@@ -296,7 +296,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	</div>
 }
 
-function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
 	const { value: asyncWalletBuild, waitFor: waitForWalletBuild, reset: resetWalletBuild } = useAsyncState().onRejected(model.noticeError)
@@ -354,7 +354,7 @@ function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	}
 }
 
-function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => unknown, style?: JSX.CSSProperties }) {
+function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeEthereumClientMemory = useOptionalSignal<EthereumClientMemory>(undefined)
 	const maybePrivateKey = useOptionalSignal<bigint>(undefined)
@@ -381,7 +381,7 @@ function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	}
 }
 
-function KeySelector({ privateKey, noticeError }: { privateKey: OptionalSignal<bigint>, noticeError: (error: unknown) => unknown }) {
+function KeySelector({ privateKey, noticeError }: { privateKey: OptionalSignal<bigint>, noticeError: (error: unknown) => void }) {
 	const seed = useOptionalSignal<Uint8Array>(undefined)
 	if (privateKey.value !== undefined) {
 		return <button onClick={() => privateKey.value = seed.value = undefined} style={{ marginLeft: 'auto' }}>Change Address</button>
@@ -392,7 +392,7 @@ function KeySelector({ privateKey, noticeError }: { privateKey: OptionalSignal<b
 	}
 }
 
-function MnemonicOrKeyPrompt({ seed, privateKey, noticeError }: { seed: OptionalSignal<Uint8Array>, privateKey: OptionalSignal<bigint>, noticeError: (error: unknown) => unknown }) {
+function MnemonicOrKeyPrompt({ seed, privateKey, noticeError }: { seed: OptionalSignal<Uint8Array>, privateKey: OptionalSignal<bigint>, noticeError: (error: unknown) => void }) {
 	const [Prompt_] = useState(() => () => {
 		const internalValue = useSignal('')
 		const { value, waitFor, reset } = useAsyncState<void>()

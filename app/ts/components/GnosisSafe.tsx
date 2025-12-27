@@ -16,7 +16,7 @@ import { Spinner } from "./Spinner.js"
 
 export function GnosisSafe(model: {
 	readonly wallet: ReadonlySignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }) {
@@ -43,7 +43,7 @@ export function GnosisSafe(model: {
 export function CreateSafe(model: {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly safeCreated: (safeAddress: bigint) => unknown
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }) {
 	const { value, waitFor } = useAsyncState<bigint>().onRejected(model.noticeError).onResolved(model.safeCreated)
 	const onClick = () => waitFor(async () => await createAndInitializeSafe(model.wallet.value.ethereumClient, model.wallet.value.address))
@@ -58,7 +58,7 @@ export function CreateSafe(model: {
 export function SafeManager(model: {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly safeAddress: ReadonlySignal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }) {
 	const asyncSafeClient = useAsyncComputed(async () => await getSafeClient(model.wallet.value.ethereumClient, model.safeAddress.value), { onRejected: model.noticeError })
 
@@ -75,7 +75,7 @@ export function SafeManager(model: {
 function Recovery(model: {
 	readonly ethereumClient: IEthereumClient
 	readonly safeClient: ReadonlySignal<SafeClient>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }) {
 	const firstRender = useSignal(true)
 	const { value: asyncDelayModuleClients, refresh } = useAsyncRefreshable(async () => {
@@ -169,7 +169,7 @@ function Recovery(model: {
 		const maybeAddress = useOptionalSignal<bigint>(undefined)
 		const maybeDelayDays = useOptionalSignal<bigint>(undefined)
 		const { value, waitFor } = useAsyncState<void>().onRejected(model.noticeError).onResolved(refresh)
-		const addRecoverer = () => {
+		const addRecoverer = (): void => {
 			const address = maybeAddress.deepValue
 			const delayDays = maybeDelayDays.deepValue
 			if (address === undefined) return model.noticeError(`Missing recoverer address.`)
@@ -202,7 +202,7 @@ function Recovery(model: {
 
 function Signers(model: {
 	readonly safeClient: ReadonlySignal<SafeClient>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }) {
 	const { value: asyncThreshold, waitFor: waitForThreshold } = useAsyncState<bigint>(model.safeClient.value.threshold).onRejected(model.noticeError)
 	const { value: asyncOwners, waitFor: waitForOwners } = useAsyncState<bigint[]>(model.safeClient.value.owners).onRejected(model.noticeError)

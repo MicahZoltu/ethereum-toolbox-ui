@@ -32,7 +32,7 @@ export function App(_model: AppModel) {
 	</main>
 }
 
-export function Apps(model: { wallet: ReadonlySignal<Wallet>, noticeError: (error: unknown) => unknown }) {
+export function Apps(model: { wallet: ReadonlySignal<Wallet>, noticeError: (error: unknown) => void }) {
 	return <>
 		<AccountDetails wallet={model.wallet} noticeError={model.noticeError} class='widget'/>
 		<Balances wallet={model.wallet} noticeError={model.noticeError} class='widget'/>

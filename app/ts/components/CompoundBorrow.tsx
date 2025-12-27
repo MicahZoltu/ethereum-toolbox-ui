@@ -23,7 +23,7 @@ const ORACLE = 0x50ce56A3239671Ab62f185704Caedf626352741en
 const ORACLE_ABI = [{"inputs":[{"internalType":"address","name":"cToken","type":"address"}],"name":"getUnderlyingPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}] as const
 export type CompoundBorrowModel = {
 	readonly wallet: ReadonlySignal<Wallet>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly style?: JSX.CSSProperties
 	readonly class?: JSX.HTMLAttributes['class']
 }
@@ -48,7 +48,7 @@ export function CompoundBorrow(model: CompoundBorrowModel) {
 type BorrowLimitModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrowLimit: OptionalSignal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 }
 function BorrowLimit(model: BorrowLimitModel) {
 	const { value: borrowLimit, waitFor: waitForBorrowLimit } = useAsyncState<bigint>()
@@ -78,7 +78,7 @@ function BorrowLimit(model: BorrowLimitModel) {
 type BorrowButtonModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly borrowAmount: Signal<bigint>
-	readonly noticeError: (error: unknown) => unknown
+	readonly noticeError: (error: unknown) => void
 	readonly sendComplete: () => void
 }
 function BorrowButton(model: BorrowButtonModel) {
