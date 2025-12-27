@@ -34,11 +34,12 @@ export function decimalStringToBigint(value: string, power: bigint): bigint {
 	return BigInt(`${integerPart}${fractionalPart}`)
 }
 
-export function jsonStringify(value: unknown, space?: string | number | undefined): string {
+export function jsonStringify<T>(value: T, space?: string | number | undefined): string {
     return JSON.stringify(value, (_key, value) => {
 		if (typeof value === 'bigint') return `0x${value.toString(16)}n`
 		if (value instanceof Uint8Array) return `b'${Array.from(value).map(x => x.toString(16).padStart(2, '0')).join('')}'`
-		return value
+		// https://github.com/uhyo/better-typescript-lib/issues/36
+		return value as JSONValueF<T>
     }, space)
 }
 export function jsonParse(text: string): unknown {
