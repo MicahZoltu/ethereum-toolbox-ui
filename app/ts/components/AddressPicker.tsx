@@ -1,4 +1,4 @@
-import { ReadonlySignal, Signal } from "@preact/signals"
+import { ReadonlySignal } from "@preact/signals"
 import { addressBigintToHex } from "../library/converters.js"
 import { SignalLike } from "preact"
 import { OptionalSignal } from "../library/preact-utilities.js"
