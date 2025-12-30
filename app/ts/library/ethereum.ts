@@ -1,11 +1,13 @@
 import { signTransaction as signTransactionWithLedger } from '@zoltu/ethereum-ledger'
-import { encodeTransaction, signTransaction as signTransactionWithKey } from '@zoltu/ethereum-transactions'
-import { addressBigintToHex, bytesToBigint, hexToBytes } from '@zoltu/ethereum-transactions/converters.js'
-import { contract } from 'micro-web3'
+import { addressBigintToHex, bigintToBytes, bytesToBigint, hexToBytes } from './converters.js'
+import { IWeb3Provider } from 'micro-eth-signer/utils.js'
 import { GNOSIS_SAFE_ABI, RECOVERABLE_WALLET_ABI } from './contract-details.js'
 import { HexAddress, ResolvePromise } from './typescript.js'
 import { jsonStringify, sleep } from './utilities.js'
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { EthCallParameters, EthCallResult, EthChainIdParameters, EthChainIdResult, EthEstimateGasParameters, EthEstimateGasResult, EthGetBalanceParameters, EthGetBalanceResult, EthGetBlockByNumberParameters, EthGetBlockByNumberResult, EthGetCodeParameters, EthGetCodeResult, EthGetTransactionCountParameters, EthGetTransactionCountResult, EthGetTransactionReceiptParameters, EthRequestAccountsResult, EthSendRawTransactionParameters, EthSendRawTransactionResult, EthSendTransactionParameters, EthSendTransactionResult, EthTransactionReceiptResult, EthereumData, EthereumQuantity, EthereumRequest, EthereumUnsignedTransaction, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, serialize } from './wire-types.js'
+import { Transaction } from 'micro-eth-signer'
+import { bytesToHex } from '@noble/hashes/utils.js'
 
 export function fromChecksummedAddress(address: string) {
 	// TODO: get micro-eth-signer working
@@ -154,7 +156,7 @@ export class EthereumClientJsonRpc extends EthereumClient {
 }
 
 export class EthereumClientRecoverable extends EthereumClient {
-	private readonly walletContract = contract(RECOVERABLE_WALLET_ABI, toMicroWeb3(this))
+	private readonly walletContract = createContract(RECOVERABLE_WALLET_ABI, toMicroEthSigner(this))
 
 	public constructor(
 		private readonly underlyingClient: IEthereumClient,
@@ -210,14 +212,14 @@ export class EthereumClientRecoverable extends EthereumClient {
 	public readonly getOwner = async () => {
 		const result = await this.underlyingClient.call({
 			to: this.address,
-			data: this.walletContract.owner.encodeInput({})
+			data: this.walletContract.owner.encodeInput()
 		}, 'latest')
 		return bytesToBigint(result)
 	}
 }
 
 export class EthereumClientSafe extends EthereumClient {
-	private readonly walletContract = contract(GNOSIS_SAFE_ABI, toMicroWeb3(this))
+	private readonly walletContract = createContract(GNOSIS_SAFE_ABI, toMicroEthSigner(this))
 
 	public constructor(
 		private readonly underlyingClient: IEthereumClient,
@@ -319,19 +321,19 @@ export class EthereumClientMemory extends EthereumClient {
 		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(async baseFee => ((baseFee * 2n * await gasLimit + value) > await balance) ? ((await balance - value) / await gasLimit) : baseFee * 2n)
 		const chainId = transaction.chainId || this.chainId()
 		const value = transaction.value || 0n
-		const signedTransaction = await signTransactionWithKey({
-			type: '1559',
+		const unsignedTransaction = new Transaction('eip1559', {
 			chainId: await chainId,
 			nonce: await nonce,
 			maxFeePerGas: await maxFeePerGas,
 			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n > await maxFeePerGas ? await maxFeePerGas : 10n**8n,
 			gasLimit: await gasLimit,
-			to: transaction.to || null,
+			to: transaction.to === null || transaction.to === undefined ? '0x' : addressBigintToHex(transaction.to),
 			value,
-			data: transaction.data || new Uint8Array(0),
+			data: bytesToHex(transaction.data || new Uint8Array(0)),
 			accessList: [],
-		}, this.privateKey)
-		const encodedTransaction = encodeTransaction(signedTransaction)
+		}, false, false)
+		const signedTransaction = unsignedTransaction.signBy(bigintToBytes(this.privateKey, 32))
+		const encodedTransaction = signedTransaction.toBytes(true)
 		const transactionHash = await this.sendRawTransaction(encodedTransaction)
 		return { transactionHash, waitForReceipt: () => this.waitForReceipt(transactionHash) }
 	}
@@ -355,27 +357,26 @@ export class EthereumClientLedger extends EthereumClient {
 		const maxFeePerGas = transaction.maxFeePerGas || this.getBaseFee('latest').then(async baseFee => ((baseFee * 2n * await gasLimit + value) > await balance) ? ((await balance - value) / await gasLimit) : baseFee * 2n)
 		const chainId = transaction.chainId || this.chainId()
 		const value = transaction.value || 0n
-		const unsignedUnencodedTransaction = {
-			type: '1559',
+		const unsignedUnencodedTransaction = new Transaction('eip1559', {
 			chainId: await chainId,
 			nonce: await nonce,
 			maxFeePerGas: await maxFeePerGas,
 			maxPriorityFeePerGas: transaction.maxPriorityFeePerGas || 10n**8n > await maxFeePerGas ? await maxFeePerGas : 10n**8n,
 			gasLimit: await gasLimit,
-			to: transaction.to || null,
+			to: transaction.to === null || transaction.to === undefined ? '0x' : addressBigintToHex(transaction.to),
 			value,
-			data: transaction.data || new Uint8Array(0),
+			data: bytesToHex(transaction.data || new Uint8Array(0)),
 			accessList: [],
-		} as const
-		const unsignedEncodedTransaction = encodeTransaction(unsignedUnencodedTransaction)
+		})
+		const unsignedEncodedTransaction = unsignedUnencodedTransaction.toBytes(false)
 		const signature = await signTransactionWithLedger(unsignedEncodedTransaction, this.derivationPath)
-		const encodedTransaction = encodeTransaction({ ...unsignedUnencodedTransaction, yParity: signature.v, r: signature.r, s: signature.s })
-		const transactionHash = await this.sendRawTransaction(encodedTransaction)
+		const encodedSignedTransaction = new Transaction('eip1559', { ...unsignedUnencodedTransaction.raw, yParity: Number(signature.v), r: signature.r, s: signature.s }, false, true)
+		const transactionHash = await this.sendRawTransaction(encodedSignedTransaction.toBytes(true))
 		return { transactionHash, waitForReceipt: () => this.waitForReceipt(transactionHash) }
 	}
 }
 
-export function toMicroWeb3(ethereumClient: IEthereumClient) {
+export function toMicroEthSigner(ethereumClient: IEthereumClient): IWeb3Provider {
 	return {
 		ethCall: async (args: {to?: string, data?: string}) => {
 			const unsignedTransaction = EthereumUnsignedTransaction.parse({ ...args, to: args.to || null })
@@ -387,6 +388,10 @@ export function toMicroWeb3(ethereumClient: IEthereumClient) {
 			const result = await ethereumClient.estimateGas(unsignedTransaction, 'latest')
 			return result
 		},
+		call: async (method: string, ...args: any[]) => {
+			const request = EthereumRequest.parse({ method, params: args })
+			await ethereumClient.request(request)
+		}
 	}
 }
 

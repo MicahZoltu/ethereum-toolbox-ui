@@ -1,4 +1,4 @@
-import { hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
+import { hexToBytes } from "./converters.js"
 
 export async function sleep(milliseconds: number) {
 	await new Promise(resolve => setTimeout(resolve, milliseconds))

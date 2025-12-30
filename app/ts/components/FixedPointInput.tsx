@@ -1,9 +1,9 @@
 import { ReadonlySignal } from '@preact/signals'
-import { JSX } from 'preact/jsx-runtime'
+import { CSSProperties, HTMLInputTypeAttribute, SignalLike } from 'preact'
+import { OptionalSignal } from '../library/preact-utilities.js'
 import { bigintToDecimalString, decimalStringToBigint } from '../library/utilities.js'
 import { AutosizingInput, ParsedAutosizingInputModel, UnparsedAutosizingInputModel } from './AutosizingInput.js'
 import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
-import { OptionalSignal } from '../library/preact-utilities.js'
 
 const sanitizationRegexp = /[^\d\.]/g
 const regexp = /^\d*\.?(?:\d+)?$/
@@ -12,11 +12,11 @@ export interface FixedPointInput {
 	value: OptionalSignal<bigint>
 	decimals: ReadonlySignal<bigint>
 	autoSize?: boolean
-	className?: string | JSX.SignalLike<string | undefined>
-	style?: string | JSX.CSSProperties | JSX.SignalLike<string | JSX.CSSProperties>
-	type?: string | JSX.SignalLike<string>
-	placeholder?: string | JSX.SignalLike<string>
-	required?: boolean | JSX.SignalLike<boolean>
+	className?: string | SignalLike<string | undefined>
+	style?: string | CSSProperties | SignalLike<string | CSSProperties>
+	type?: HTMLInputTypeAttribute // preact doesn't support signals for input element type
+	placeholder?: string | SignalLike<string>
+	required?: boolean | SignalLike<boolean>
 	onChange?: () => void
 }
 export function FixedPointInput(model: FixedPointInput) {

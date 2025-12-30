@@ -1,12 +1,11 @@
 import { ReadonlySignal, Signal, batch, useSignal } from '@preact/signals'
-import { addressBigintToHex, bigintToHex } from '@zoltu/ethereum-transactions/converters.js'
-import { contract } from 'micro-web3'
-import { ERC20, WETH, WETH_CONTRACT } from 'micro-web3/contracts/index.js'
+import { addressBigintToHex, bigintToHex } from '../library/converters.js'
+import { ERC20, WETH, createContract } from "micro-eth-signer/advanced/abi.js"
+import { CSSProperties, HTMLAttributes } from 'preact'
 import { useState } from 'preact/hooks'
-import { JSX } from 'preact/jsx-runtime'
 import { savedWallets } from '../library/addresses.js'
 import { ERC20_ABI, QUOTER_ABI, ROUTER_ABI, UNISWAP_QUOTER_ADDRESS, UNISWAP_ROUTER_ADDRESS } from '../library/contract-details.js'
-import { Wallet, toMicroWeb3 } from '../library/ethereum.js'
+import { Wallet, toMicroEthSigner } from '../library/ethereum.js'
 import { OptionalSignal, useAsyncComputed, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
 import { AssetDetails, ETH_DETAILS, WETH_DETAILS } from '../library/tokens.js'
 import { ResolvePromise } from '../library/typescript.js'
@@ -19,16 +18,16 @@ import { Spinner } from './Spinner.js'
 import { TokenAndAmount } from './TokenAndAmount.js'
 
 type Route = { userSpecifiedValue: 'source' | 'target', source: AssetDetails, target: AssetDetails, amountIn: bigint, amountOut: bigint, fee: bigint }
-const erc20 = contract(ERC20_ABI)
+const erc20 = createContract(ERC20_ABI)
 
 export type SwapAndSendModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly noticeError: (error: unknown) => void
-	readonly style?: JSX.CSSProperties
-	readonly class?: JSX.HTMLAttributes['class']
+	readonly style?: CSSProperties
+	readonly class?: HTMLAttributes['class']
 }
 export function SwapAndSend(model: SwapAndSendModel) {
-	const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
+	const microWeb3Provider = toMicroEthSigner(model.wallet.value.ethereumClient)
 
 	const sourceTokenSignal = useSignal<AssetDetails>(ETH_DETAILS)
 	const sourceAmount = useOptionalSignal<bigint>(undefined)
@@ -61,7 +60,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 					return { amountOut: amountIn, fee: 0n }
 				}
 				const swapAndSend = async () => {
-					const quoteExactInputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactInputSingle.call
+					const quoteExactInputSingle = createContract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactInputSingle.call
 					const arrayOfObjectsWithPromises = [
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 500n, amountIn, sqrtPriceLimitX96: 0n }), fee: 500n },
 						{ promise: quoteExactInputSingle({ tokenIn, tokenOut, fee: 3000n, amountIn, sqrtPriceLimitX96: 0n }), fee: 3000n },
@@ -113,7 +112,7 @@ export function SwapAndSend(model: SwapAndSendModel) {
 				
 				const transferOrWrap = () => ({ amountIn: amountOut, fee: 0n })
 				const swapAndSend = async () => {
-					const quoteExactOutputSingle = contract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactOutputSingle.call
+					const quoteExactOutputSingle = createContract(QUOTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_QUOTER_ADDRESS)).quoteExactOutputSingle.call
 					const arrayOfObjectsWithPromises = [
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 500n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 500n },
 						{ promise: quoteExactOutputSingle({ tokenIn, tokenOut, fee: 3000n, amount: amountOut, sqrtPriceLimitX96: 0n }), fee: 3000n },
@@ -222,9 +221,9 @@ function SwapButton(model: SwapButtonModel) {
 			const fee = model.route.deepValue.fee
 			const recipientString = addressBigintToHex(model.recipient.deepValue)
 
-			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			const router = contract(ROUTER_ABI, microWeb3Provider, addressBigintToHex(UNISWAP_ROUTER_ADDRESS))
-			const weth = contract(WETH, microWeb3Provider, WETH_CONTRACT)
+			const microEthSignerProvider = toMicroEthSigner(model.wallet.value.ethereumClient)
+			const router = createContract(ROUTER_ABI, microEthSignerProvider, addressBigintToHex(UNISWAP_ROUTER_ADDRESS))
+			const weth = createContract(WETH, microEthSignerProvider, addressBigintToHex(WETH_DETAILS.address))
 			let sendTransactionResult: ResolvePromise<ReturnType<typeof wallet.ethereumClient.sendTransaction>>
 			if (model.route.deepValue.source.symbol === 'ETH' && model.route.deepValue.target.symbol === 'ETH') {
 				// special case for sweeping when sending all ETH from gas-paying account
@@ -250,7 +249,7 @@ function SwapButton(model: SwapButtonModel) {
 			} else if (model.route.deepValue.source === model.route.deepValue.target && typeof model.route.deepValue.source.address === 'bigint') {
 				// special case for simple token transfers
 				const tokenAddress = model.route.deepValue.source.address
-				const token = contract(ERC20, microWeb3Provider, addressBigintToHex(tokenAddress))
+				const token = createContract(ERC20, microEthSignerProvider, addressBigintToHex(tokenAddress))
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: tokenAddress,
 					value: 0n,
@@ -261,7 +260,7 @@ function SwapButton(model: SwapButtonModel) {
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({
 					to: WETH_DETAILS.address,
 					value: model.route.deepValue.amountIn,
-					data: weth.deposit.encodeInput({}),
+					data: weth.deposit.encodeInput(),
 				})
 			} else if (model.route.deepValue.source.symbol === 'WETH' && model.route.deepValue.target.symbol === 'ETH') {
 				// special case for unwrapping ETH
@@ -288,7 +287,7 @@ function SwapButton(model: SwapButtonModel) {
 					router.sweepToken.encodeInput({ token: tokenIn, amountMinimum: 0n, recipient: recipientString }),
 					router.sweepToken.encodeInput({ token: tokenOut, amountMinimum: 0n, recipient: recipientString }),
 					router.unwrapWETH9.encodeInput({amountMinimum: 0n, recipient: recipientString}),
-					router.refundETH.encodeInput({}),
+					router.refundETH.encodeInput(),
 				]
 				const transaction = router.multicall.encodeInput({ deadline, data: transactions })
 				sendTransactionResult = await wallet.ethereumClient.sendTransaction({

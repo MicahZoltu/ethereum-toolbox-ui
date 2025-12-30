@@ -1,9 +1,9 @@
 import { ReadonlySignal, Signal, useSignal, useSignalEffect } from "@preact/signals"
-import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
-import { contract } from "micro-web3"
+import { addressBigintToHex } from "../library/converters.js"
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
-import { Wallet, toMicroWeb3 } from "../library/ethereum.js"
+import { Wallet, toMicroEthSigner } from "../library/ethereum.js"
 import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { bigintToDecimalString } from "../library/utilities.js"
 import { FixedPointInput } from "./FixedPointInput.js"
@@ -54,9 +54,9 @@ function BorrowLimit(model: BorrowLimitModel) {
 	const { value: borrowLimit, waitFor: waitForBorrowLimit } = useAsyncState<bigint>()
 	function refresh() {
 		waitForBorrowLimit(async () => {
-			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-			const comptroller = contract(COMPTROLLER_ABI, microWeb3Provider, addressBigintToHex(COMPTROLLER))
-			const oracle = contract(ORACLE_ABI, microWeb3Provider, addressBigintToHex(ORACLE))
+			const microWeb3Provider = toMicroEthSigner(model.wallet.value.ethereumClient)
+			const comptroller = createContract(COMPTROLLER_ABI, microWeb3Provider, addressBigintToHex(COMPTROLLER))
+			const oracle = createContract(ORACLE_ABI, microWeb3Provider, addressBigintToHex(ORACLE))
 			const liquidityAttousd = (await comptroller.getAccountLiquidity.call(addressBigintToHex(model.wallet.value.address))).liquidity
 			const attoethPerUsd = await oracle.getUnderlyingPrice.call(addressBigintToHex(CETH))
 			const borrowLimitAttoeth = liquidityAttousd * 10n**18n * 9n / attoethPerUsd / 10n
@@ -88,11 +88,11 @@ function BorrowButton(model: BorrowButtonModel) {
 	function submit() {
 		waitForSend(async () => {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
-			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
+			const microWeb3Provider = toMicroEthSigner(model.wallet.value.ethereumClient)
 			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH,
 				value: 0n,
-				data: contract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrow.encodeInput(model.borrowAmount.value),
+				data: createContract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrow.encodeInput(model.borrowAmount.value),
 			})).waitForReceipt()
 		})
 	}

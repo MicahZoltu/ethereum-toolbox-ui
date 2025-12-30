@@ -1,11 +1,11 @@
 import { ReadonlySignal, Signal, useComputed, useSignalEffect } from "@preact/signals"
-import { addressBigintToHex, bigintToHex } from "@zoltu/ethereum-transactions/converters.js"
-import { contract } from "micro-web3"
+import { addressBigintToHex, bigintToHex } from "../library/converters.js"
+import { createContract } from "micro-eth-signer/advanced/abi.js"
+import { CSSProperties, HTMLAttributes } from "preact"
 import { useState } from "preact/hooks"
-import { JSX } from "preact/jsx-runtime"
 import { savedWallets } from "../library/addresses.js"
 import { ERC20_ABI, YEARN_VAULT_ABI, YEARN_VAULT_WETH_1_ADDRESS } from "../library/contract-details.js"
-import { toMicroWeb3, Wallet } from "../library/ethereum.js"
+import { toMicroEthSigner, Wallet } from "../library/ethereum.js"
 import { useAsyncRefreshable, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { WETH_DETAILS } from "../library/tokens.js"
 import { bigintToDecimalString } from "../library/utilities.js"
@@ -16,15 +16,15 @@ import { Refresh } from "./Refresh.js"
 import { Spacer } from "./Spacer.js"
 import { Spinner } from "./Spinner.js"
 
-const erc20 = contract(ERC20_ABI)
-const vault = contract(YEARN_VAULT_ABI)
+const erc20 = createContract(ERC20_ABI)
+const vault = createContract(YEARN_VAULT_ABI)
 const decimals = new Signal(18n)
 
 export interface DepositIntoVaultModel {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly noticeError: (error: unknown) => void
-	readonly style?: JSX.CSSProperties
-	readonly class?: JSX.HTMLAttributes['class']
+	readonly style?: CSSProperties
+	readonly class?: HTMLAttributes['class']
 }
 
 export function DepositIntoVault(model: DepositIntoVaultModel) {
@@ -120,13 +120,13 @@ function ApproveAndDepositButton(model: ApproveAndDepositButtonModel) {
 export interface WithdrawFromVaultModel {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly noticeError: (error: unknown) => void
-	readonly style?: JSX.CSSProperties
-	readonly class?: JSX.HTMLAttributes['class']
+	readonly style?: CSSProperties
+	readonly class?: HTMLAttributes['class']
 }
 
 export function WithdrawFromVault(model: WithdrawFromVaultModel) {
-	const microWeb3Provider = useComputed(() => toMicroWeb3(model.wallet.value.ethereumClient))
-	const yvWeth1 = useComputed(() => contract(YEARN_VAULT_ABI, microWeb3Provider.value, addressBigintToHex(YEARN_VAULT_WETH_1_ADDRESS)))
+	const microWeb3Provider = useComputed(() => toMicroEthSigner(model.wallet.value.ethereumClient))
+	const yvWeth1 = useComputed(() => createContract(YEARN_VAULT_ABI, microWeb3Provider.value, addressBigintToHex(YEARN_VAULT_WETH_1_ADDRESS)))
 	const maybeAmount = useOptionalSignal<bigint>(undefined)
 	const maybeReceiver = useOptionalSignal<bigint>(undefined)
 	const { value: amountEth, refresh: refreshAmountEth } = useAsyncRefreshable(async () => {

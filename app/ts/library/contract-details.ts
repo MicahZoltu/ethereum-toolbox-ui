@@ -1,4 +1,4 @@
-import { hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
+import { hexToBytes } from "./converters.js"
 
 export const GNOSIS_SAFE_PROXY_FACTORY_ADDRESS = 0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2n
 export const GNOSIS_SAFE_MASTER_ADDRESS = 0xd9Db270c1B5E3Bd161E8c8503c55cEABeE709552n

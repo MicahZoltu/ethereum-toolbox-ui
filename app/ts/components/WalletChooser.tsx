@@ -1,13 +1,13 @@
 import { ReadonlySignal, useSignal, useSignalEffect } from '@preact/signals'
 import { HDKey } from '@scure/bip32'
-import { generateMnemonic, mnemonicToSeed, validateMnemonic } from '@zoltu/bip39'
-import { wordlist } from '@zoltu/bip39/wordlists/english.js'
+import { generateMnemonic, mnemonicToSeed, validateMnemonic } from '@scure/bip39'
+import { wordlist } from '@scure/bip39/wordlists/english.js'
 import { getAddress as getAddressFromLedger } from '@zoltu/ethereum-ledger'
-import { getAddress as getAddressFromPrivateKey } from '@zoltu/ethereum-transactions'
-import { addressBigintToHex, bigintToHex, bytesToBigint } from '@zoltu/ethereum-transactions/converters.js'
+import { CSSProperties, HTMLAttributes } from 'preact'
 import { useState } from 'preact/hooks'
-import { JSX } from 'preact/jsx-runtime'
+import { addr } from 'micro-eth-signer'
 import { forgetRecoverableWalletAddress, forgetSafeWalletAddress, forgetWalletAddress, forgetWindowWalletAddress, rememberLedgerWalletAddress, rememberRecoverableWalletAddress, rememberSafeWalletAddress, rememberWindowWalletAddress, savedRecoverableWallets, savedSafeWallets, savedWallets, savedWindowWallets } from '../library/addresses.js'
+import { addressBigintToHex, addressHexToBigint, bigintToBytes, bigintToHex, bytesToBigint } from '../library/converters.js'
 import { EthereumClientJsonRpc, EthereumClientLedger, EthereumClientMemory, EthereumClientRecoverable, EthereumClientSafe, EthereumClientWindow, Wallet } from '../library/ethereum.js'
 import { getExistingSafeAddresses } from '../library/gnosis-safe.js'
 import { OptionalSignal, useAsyncState, useOptionalSignal } from '../library/preact-utilities.js'
@@ -21,13 +21,13 @@ import { Spinner } from './Spinner.js'
 export interface WalletChooserModel {
 	readonly wallet: OptionalSignal<Wallet>
 	readonly noticeError: (error: unknown) => void
-	readonly style?: JSX.CSSProperties
-	readonly class?: JSX.HTMLAttributes['class']
+	readonly style?: CSSProperties
+	readonly class?: HTMLAttributes['class']
 }
 export function WalletChooser(model: WalletChooserModel) {
 	const walletType = useSignal<'readonly' | 'memory' | 'window' | 'recoverable' | 'safe' | 'ledger'>('readonly')
 	useSignalEffect(() => walletType.value && model.wallet.clear())
-	const [WalletBuilder_] = useState(() => ({style}: {style?: JSX.CSSProperties}) => {
+	const [WalletBuilder_] = useState(() => ({style}: {style?: CSSProperties}) => {
 		switch (walletType.value) {
 			case 'readonly': return <ReadonlyWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
 			case 'memory': return <MemoryWalletBuilder wallet={model.wallet} noticeError={model.noticeError} style={style}/>
@@ -43,7 +43,7 @@ export function WalletChooser(model: WalletChooserModel) {
 	</div>
 }
 
-function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const maybeEthereumClient = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -82,7 +82,7 @@ function ReadonlyWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeEr
 	}
 }
 
-function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const underlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	useSignalEffect(() => {
@@ -162,7 +162,7 @@ function RecoverableWalletBuilder(model: { wallet: OptionalSignal<Wallet>, notic
 	</div>
 }
 
-function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const maybeUnderlyingWallet = useOptionalSignal<Wallet>(undefined)
 	const maybeAddress = useOptionalSignal<bigint>(undefined)
 	const suggestedSafes = useAsyncState<bigint[]>(undefined, { onRejected: model.noticeError })
@@ -249,7 +249,7 @@ function SafeWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError:
 	</div>
 }
 
-function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const ethereumClientSignal = useOptionalSignal(EthereumClientWindow.tryCreate())
 	const ethereumClient = ethereumClientSignal.deepValue
 	if (!ethereumClient) return <>No browser wallet detected.</>
@@ -296,7 +296,7 @@ function WindowWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	</div>
 }
 
-function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeDerivationPath = useOptionalSignal<`m/${string}`>(undefined)
 	const { value: asyncWalletBuild, waitFor: waitForWalletBuild, reset: resetWalletBuild } = useAsyncState().onRejected(model.noticeError)
@@ -354,7 +354,7 @@ function LedgerWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	}
 }
 
-function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: JSX.CSSProperties }) {
+function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeError: (error: unknown) => void, style?: CSSProperties }) {
 	const maybeEthereumClientRpc = useOptionalSignal<EthereumClientJsonRpc>(undefined)
 	const maybeEthereumClientMemory = useOptionalSignal<EthereumClientMemory>(undefined)
 	const maybePrivateKey = useOptionalSignal<bigint>(undefined)
@@ -366,7 +366,7 @@ function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 		} else if (privateKey === undefined) {
 			model.wallet.clear()
 		} else {
-			const address = getAddressFromPrivateKey(privateKey)
+			const address = addressHexToBigint(addr.fromPrivateKey(bigintToBytes(privateKey, 32)))
 			const ethereumClient = maybeEthereumClientMemory.deepValue = new EthereumClientMemory(ethereumClientRpc, privateKey, address)
 			model.wallet.deepValue = ({ readonly: false, address, ethereumClient, isGasPayer: true })
 		}
@@ -377,7 +377,7 @@ function MemoryWalletBuilder(model: { wallet: OptionalSignal<Wallet>, noticeErro
 	} else if (maybePrivateKey.value === undefined) {
 		return <KeySelector privateKey={maybePrivateKey} noticeError={model.noticeError}/>
 	} else {
-		return <div id='memory-builder' style={model.style}><span>Address:<code>{addressBigintToHex(getAddressFromPrivateKey(maybePrivateKey.value.value))}</code></span><span>Private Key:<code class='secret'>{bigintToHex(maybePrivateKey.value.value, 32)}</code></span><ChangeAccountButton_/></div>
+		return <div id='memory-builder' style={model.style}><span>Address:<code>{addr.fromPrivateKey(bigintToBytes(maybePrivateKey.value.value, 32))}</code></span><span>Private Key:<code class='secret'>{bigintToHex(maybePrivateKey.value.value, 32)}</code></span><ChangeAccountButton_/></div>
 	}
 }
 

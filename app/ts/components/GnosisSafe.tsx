@@ -1,5 +1,5 @@
 import { ReadonlySignal, useSignal } from "@preact/signals"
-import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
+import { addressBigintToHex } from "../library/converters.js"
 import { useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
 import { savedSafeWallets, savedWallets } from '../library/addresses.js'

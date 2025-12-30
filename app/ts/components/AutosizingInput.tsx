@@ -1,9 +1,9 @@
-import { JSX } from 'preact/jsx-runtime'
 import { Signal, useComputed, useSignal } from '@preact/signals'
-import { Shadow } from './Shadow.js'
+import { HTMLAttributes } from 'preact'
 import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
+import { Shadow } from './Shadow.js'
 
-export interface BaseAutosizingInputModel extends Pick<JSX.HTMLAttributes<HTMLSpanElement>, 'class' | 'style'>, Pick<UnparsedInputModel, 'key' | 'type' | 'pattern' | 'placeholder' | 'required' | 'onChange' | 'autocomplete'> {
+export interface BaseAutosizingInputModel extends Pick<HTMLAttributes<HTMLSpanElement>, 'class' | 'style'>, Pick<UnparsedInputModel, 'key' | 'type' | 'pattern' | 'placeholder' | 'required' | 'onChange' | 'autocomplete'> {
 	readonly dataList?: string[]
 	readonly rawValue?: Signal<string>
 }
