@@ -6,7 +6,7 @@ import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 
 const dependencyPaths = [
-	{ packageName: 'preact', subfolderToVendor: '.', mainEntrypointFile: 'preact.mjs', alternateEntrypoints: { 'jsx-runtime': 'jsx-runtime/dist/jsxRuntime.mjs', 'hooks': 'hooks/dist/hooks.mjs', 'debug': 'debug/dist/debug.mjs', 'devtools': 'devtools/dist/devtools.mjs' } },
+	{ packageName: 'preact', subfolderToVendor: '.', mainEntrypointFile: 'dist/preact.mjs', alternateEntrypoints: { 'jsx-runtime': 'jsx-runtime/dist/jsxRuntime.mjs', 'hooks': 'hooks/dist/hooks.mjs', 'debug': 'debug/dist/debug.mjs', 'devtools': 'devtools/dist/devtools.mjs' } },
 	{ packageName: '@preact/signals', subfolderToVendor: '.', mainEntrypointFile: 'dist/signals.mjs', alternateEntrypoints: {} },
 	{ packageName: '@preact/signals-core', subfolderToVendor: '.', mainEntrypointFile: 'dist/signals-core.mjs', alternateEntrypoints: {} },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
