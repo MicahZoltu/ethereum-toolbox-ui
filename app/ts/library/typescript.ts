@@ -21,3 +21,6 @@ export function isArray(value: unknown): value is unknown[] {
 export function isReadonlyArray(value: unknown): value is readonly unknown[] {
 	return Array.isArray(value)
 }
+
+// https://github.com/microsoft/TypeScript/issues/54451
+export type MappedOmit<T, K extends keyof T> = { [P in keyof T as P extends K ? never : P]: T[P] }

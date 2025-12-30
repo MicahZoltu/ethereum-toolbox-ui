@@ -3,10 +3,14 @@
 {
 	"name": "Node.js",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/javascript-node:0-20",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:4.0.6-24-trixie@sha256:bc9064c4a22cae05a94f3e1e5fcb03b294d44068133dc888b02f1a9d7f439244",
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+	"features": {
+		// @sha256:689eae681aa08981175829a59953ba67a7d311f6a05c15d1bbbcb2da2839827e
+		// https://github.com/microsoft/vscode-remote-release/issues/11241
+		"ghcr.io/shyim/devcontainers-features/bun:0.0.1": {}
+	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],

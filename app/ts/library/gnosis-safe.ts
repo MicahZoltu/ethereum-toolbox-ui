@@ -1,16 +1,16 @@
-import { keccak_256 } from '@noble/hashes/sha3'
-import { addressBigintToHex, addressHexToBigint, bigintToBytes, bytesToBigint, hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
-import { contract } from 'micro-web3'
+import { keccak_256 } from '@noble/hashes/sha3.js'
+import { addressBigintToHex, addressHexToBigint, bigintToBytes, bytesToBigint, hexToBytes } from "./converters.js"
+import { createContract } from 'micro-eth-signer/advanced/abi.js'
 import { GNOSIS_SAFE_ABI, GNOSIS_SAFE_DELAY_MODULE_ABI, GNOSIS_SAFE_DELAY_MODULE_MASTER_ADDRESS, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI, GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ADDRESS, GNOSIS_SAFE_FALLBACK_HANDLER_ADDRESS, GNOSIS_SAFE_MASTER_ADDRESS, GNOSIS_SAFE_PROXY_DEPLOYMENT_BYTECODE, GNOSIS_SAFE_PROXY_FACTORY_ABI, GNOSIS_SAFE_PROXY_FACTORY_ADDRESS, MULTISEND_CALL_ABI, MULTISEND_CALL_ADDRESS } from "../library/contract-details.js"
 import { PermitUnion, ResolvePromise } from "../library/typescript.js"
 import { IEthereumClient } from './ethereum.js'
 
 // this is relatively expensive to instantiate and it is pure so we can just reuse this one instance
-const safeFactoryContract = contract(GNOSIS_SAFE_PROXY_FACTORY_ABI)
-const safeContract = contract(GNOSIS_SAFE_ABI)
-const multisendContract = contract(MULTISEND_CALL_ABI)
-const delayModuleContract = contract(GNOSIS_SAFE_DELAY_MODULE_ABI)
-const delayModuleProxyFactoryContract = contract(GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI)
+const safeFactoryContract = createContract(GNOSIS_SAFE_PROXY_FACTORY_ABI)
+const safeContract = createContract(GNOSIS_SAFE_ABI)
+const multisendContract = createContract(MULTISEND_CALL_ABI)
+const delayModuleContract = createContract(GNOSIS_SAFE_DELAY_MODULE_ABI)
+const delayModuleProxyFactoryContract = createContract(GNOSIS_SAFE_DELAY_MODULE_PROXY_FACTORY_ABI)
 
 function getSafeInitializerForOwner(ownerAddress: bigint) {
 	return safeContract.setup.encodeInput({
@@ -95,28 +95,28 @@ export async function tryGetDelayModuleClients(ethereumClient: IEthereumClient, 
 	async function getSafe() {
 		const result = await ethereumClient.call({
 			to: delayModuleAddress,
-			data: delayModuleContract.avatar.encodeInput({}),
+			data: delayModuleContract.avatar.encodeInput(),
 		}, 'latest')
 		return addressHexToBigint(delayModuleContract.avatar.decodeOutput(result))
 	}
 	async function getNonce() {
 		const result = await ethereumClient.call({
 			to: delayModuleAddress,
-			data: delayModuleContract.txNonce.encodeInput({}),
+			data: delayModuleContract.txNonce.encodeInput(),
 		}, 'latest')
 		return delayModuleContract.txNonce.decodeOutput(result)
 	}
 	async function getQueuedNonce() {
 		const result = await ethereumClient.call({
 			to: delayModuleAddress,
-			data: delayModuleContract.queueNonce.encodeInput({}),
+			data: delayModuleContract.queueNonce.encodeInput(),
 		}, 'latest')
 		return delayModuleContract.queueNonce.decodeOutput(result)
 	}
 	async function getCooldown() {
 		const result = await ethereumClient.call({
 			to: delayModuleAddress,
-			data: delayModuleContract.txCooldown.encodeInput({}),
+			data: delayModuleContract.txCooldown.encodeInput(),
 		}, 'latest')
 		return delayModuleContract.txCooldown.decodeOutput(result)
 	}
@@ -211,7 +211,7 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 	async function getOwners() {
 		const result = await ethereumClient.call({
 			to: safeAddress,
-			data: safeContract.getOwners.encodeInput({}),
+			data: safeContract.getOwners.encodeInput(),
 		}, 'latest')
 		if (result.length === 0) return []
 		return safeContract.getOwners.decodeOutput(result).map(addressHexToBigint)
@@ -220,7 +220,7 @@ export async function getSafeClient(ethereumClient: IEthereumClient, safeAddress
 	async function getThreshold() {
 		const result = await ethereumClient.call({
 			to: safeAddress,
-			data: safeContract.getThreshold.encodeInput({}),
+			data: safeContract.getThreshold.encodeInput(),
 		}, 'latest')
 		return safeContract.getThreshold.decodeOutput(result)
 	}

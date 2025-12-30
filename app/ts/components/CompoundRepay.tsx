@@ -1,10 +1,10 @@
 import { ReadonlySignal, Signal, useSignal, useSignalEffect } from "@preact/signals"
-import { addressBigintToHex } from "@zoltu/ethereum-transactions/converters.js"
-import { contract } from "micro-web3"
+import { addressBigintToHex } from "../library/converters.js"
+import { createContract } from "micro-eth-signer/advanced/abi.js"
+import { CSSProperties, HTMLAttributes } from "preact"
 import { useState } from "preact/hooks"
-import { JSX } from "preact/jsx-runtime"
 import { savedWallets } from "../library/addresses.js"
-import { Wallet, toMicroWeb3 } from "../library/ethereum.js"
+import { Wallet, toMicroEthSigner } from "../library/ethereum.js"
 import { OptionalSignal, useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { bigintToDecimalString } from "../library/utilities.js"
 import { AddressPicker } from "./AddressPicker.js"
@@ -21,8 +21,8 @@ const CETH_ABI = [{"constant":false,"inputs":[{"name":"account","type":"address"
 export type CompoundRepayModel = {
 	readonly wallet: ReadonlySignal<Wallet>
 	readonly noticeError: (error: unknown) => void
-	readonly style?: JSX.CSSProperties
-	readonly class?: JSX.HTMLAttributes['class']
+	readonly style?: CSSProperties
+	readonly class?: HTMLAttributes['class']
 }
 export function CompoundRepay(model: CompoundRepayModel) {
 	const maybeBorrower = useOptionalSignal<bigint>(undefined)
@@ -63,8 +63,8 @@ type CompoundDebt = {
 function CompoundDebt(model: CompoundDebt) {
 	const { value: debtAmount, waitFor: waitForDebtAmount } = useAsyncState<bigint>()
 	function refresh() {
-		const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
-		waitForDebtAmount(async () => await contract(CETH_ABI, microWeb3Provider, addressBigintToHex(CETH)).borrowBalanceCurrent.call(addressBigintToHex(model.borrower.peek())))
+		const microEthSignerProvider = toMicroEthSigner(model.wallet.value.ethereumClient)
+		waitForDebtAmount(async () => await createContract(CETH_ABI, microEthSignerProvider, addressBigintToHex(CETH)).borrowBalanceCurrent.call(addressBigintToHex(model.borrower.peek())))
 	}
 	useSignalEffect(refresh)
 	useSignalEffect(() => { model.debtInAttoeth.value === undefined && refresh() })
@@ -93,11 +93,11 @@ function PayDebtButton(model: PayDebtButtonModel) {
 	function submit() {
 		waitForSend(async () => {
 			if (model.wallet.value.readonly) throw new Error(`The selected wallet cannot send transactions.`)
-			const microWeb3Provider = toMicroWeb3(model.wallet.value.ethereumClient)
+			const microWeb3Provider = toMicroEthSigner(model.wallet.value.ethereumClient)
 			await (await model.wallet.value.ethereumClient.sendTransaction({
 				to: CETH_REPAY_HELPER,
 				value: model.amountToRepay.value,
-				data: contract(CETH_REPAY_HELPER_ABI, microWeb3Provider, addressBigintToHex(CETH_REPAY_HELPER)).repayBehalfExplicit.encodeInput({ borrower: addressBigintToHex(model.debtorAddress.value), cEther_: addressBigintToHex(CETH) }),
+				data: createContract(CETH_REPAY_HELPER_ABI, microWeb3Provider, addressBigintToHex(CETH_REPAY_HELPER)).repayBehalfExplicit.encodeInput({ borrower: addressBigintToHex(model.debtorAddress.value), cEther_: addressBigintToHex(CETH) }),
 			})).waitForReceipt()
 		})
 	}

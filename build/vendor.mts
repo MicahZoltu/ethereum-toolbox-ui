@@ -6,25 +6,19 @@ import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 
 const dependencyPaths = [
-	{ packageName: 'preact', subfolderToVendor: 'dist', mainEntrypointFile: 'preact.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/jsx-runtime', subfolderToVendor: 'dist', mainEntrypointFile: 'jsxRuntime.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/hooks', subfolderToVendor: 'dist', mainEntrypointFile: 'hooks.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/debug', subfolderToVendor: 'dist', mainEntrypointFile: 'debug.module.js', alternateEntrypoints: {} },
-	{ packageName: 'preact/devtools', subfolderToVendor: 'dist', mainEntrypointFile: 'devtools.module.js', alternateEntrypoints: {} },
-	{ packageName: '@preact/signals', subfolderToVendor: 'dist', mainEntrypointFile: 'signals.module.js', alternateEntrypoints: {} },
-	{ packageName: '@preact/signals-core', subfolderToVendor: 'dist', mainEntrypointFile: 'signals-core.module.js', alternateEntrypoints: {} },
+	{ packageName: 'preact', subfolderToVendor: '.', mainEntrypointFile: 'preact.mjs', alternateEntrypoints: { 'jsx-runtime': 'jsx-runtime/dist/jsxRuntime.mjs', 'hooks': 'hooks/dist/hooks.mjs', 'debug': 'debug/dist/debug.mjs', 'devtools': 'devtools/dist/devtools.mjs' } },
+	{ packageName: '@preact/signals', subfolderToVendor: '.', mainEntrypointFile: 'dist/signals.mjs', alternateEntrypoints: {} },
+	{ packageName: '@preact/signals-core', subfolderToVendor: '.', mainEntrypointFile: 'dist/signals-core.mjs', alternateEntrypoints: {} },
 	{ packageName: 'funtypes', subfolderToVendor: 'lib', mainEntrypointFile: 'index.mjs', alternateEntrypoints: {} },
-	{ packageName: '@noble/hashes', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'crypto': 'crypto.js', 'sha3': 'sha3.js', 'utils': 'utils.js', '_assert': '_assert.js', 'sha256': 'sha256.js', 'sha512': 'sha512.js', 'pbkdf2': 'pbkdf2.js', 'hmac': 'hmac.js', 'ripemd160': 'ripemd160.js' } },
-	{ packageName: '@noble/curves', subfolderToVendor: 'esm', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'secp256k1': 'secp256k1.js', 'abstract/modular': 'abstract/modular.js' } },
+	{ packageName: '@noble/hashes', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'sha3.js': 'sha3.js', 'sha3': 'sha3.js', 'pbkdf2.js': 'pbkdf2.js', 'sha2.js': 'sha2.js', 'hmac.js': 'hmac.js', 'utils.js': 'utils.js', 'legacy.js': 'legacy.js', 'webcrypto.js': 'webcrypto.js' } },
+	{ packageName: '@noble/curves', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'secp256k1.js': 'secp256k1.js', 'utils.js': 'utils.js' } },
 	{ packageName: '@noble/secp256k1', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: '@scure/base', subfolderToVendor: 'lib/esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: '@scure/bip32', subfolderToVendor: 'lib/esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: '@zoltu/bip39', subfolderToVendor: 'output', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'wordlists/english.js': 'wordlists/english.js' } },
-	{ packageName: '@zoltu/rlp-encoder', subfolderToVendor: 'output-esm', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: '@zoltu/ethereum-ledger', subfolderToVendor: 'output-es', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
-	{ packageName: '@zoltu/ethereum-transactions', subfolderToVendor: 'output', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'converters.js': 'converters.js' } },
-	{ packageName: 'micro-web3', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'api/uniswap-v3.js': 'api/uniswap-v3.js', 'contracts/index.js': 'contracts/index.js' } },
+	{ packageName: '@scure/bip32', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: '@scure/base', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: '@scure/bip39', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'wordlists/english.js': 'wordlists/english.js' } },
+	{ packageName: 'micro-eth-signer', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: { 'utils.js': 'utils.js', 'advanced/abi.js': 'advanced/abi.js' } },
 	{ packageName: 'micro-packed', subfolderToVendor: '.', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
+	{ packageName: '@zoltu/ethereum-ledger', subfolderToVendor: 'output-es', mainEntrypointFile: 'index.js', alternateEntrypoints: {} },
 	// { packageName: '', subfolderToVendor: '', entrypointFile: '', alternateEntrypoints: {} },
 ]
 
@@ -43,7 +37,7 @@ async function vendorDependencies() {
 			if (fileType === 'directory') return true
 			return false
 		}
-		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate, rewriteSourceMapSourcePath.bind(undefined, packageName))
+		await recursiveDirectoryCopy(sourceDirectoryPath, destinationDirectoryPath, inclusionPredicate)
 	}
 
 	const indexHtmlPath = path.join(directoryOfThisFile, '..', 'app', 'index.html')
@@ -59,21 +53,6 @@ async function vendorDependencies() {
 		.replace(/^/mg, '\t\t')
 	const newIndexHtml = oldIndexHtml.replace(/<script type='importmap'>[\s\S]*?<\/script>/m, `<script type='importmap'>\n${importmapJson}\n\t</script>`)
 	await fs.writeFile(indexHtmlPath, newIndexHtml)
-}
-
-// rewrite the source paths in sourcemap files so they show up in the debugger in a reasonable location and if two source maps refer to the same (relative) path, we end up with them distinguished in the browser debugger
-async function rewriteSourceMapSourcePath(packageName: string, sourcePath: string, destinationPath: string) {
-	const fileExtension = path.extname(sourcePath)
-	if (fileExtension !== '.map') return
-	const fileContents = JSON.parse(await fs.readFile(sourcePath, 'utf-8')) as { sources: Array<string> }
-	for (let i = 0; i < fileContents.sources.length; ++i) {
-		const source = fileContents.sources[i]
-		if (source === undefined) continue
-		// we want to ensure all source files show up in the appropriate directory and don't leak out of our directory tree, so we strip leading '../' references
-		const sourcePath = source.replace(/^(?:.\/)*/, '').replace(/^(?:..\/)*/, '')
-		fileContents.sources[i] = ['dependencies://dependencies', packageName, sourcePath].join('/')
-	}
-	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }
 
 vendorDependencies().catch(error => {

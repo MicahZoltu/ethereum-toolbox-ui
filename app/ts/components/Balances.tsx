@@ -1,10 +1,9 @@
 import { ReadonlySignal, useSignalEffect } from "@preact/signals"
-import { addressBigintToHex, bytesToBigint, hexToBytes } from "@zoltu/ethereum-transactions/converters.js"
-import { contract } from "micro-web3"
-import { ERC20 } from "micro-web3/contracts/index.js"
+import { addressBigintToHex, bytesToBigint, hexToBytes } from "../library/converters.js"
+import { ERC20, createContract } from 'micro-eth-signer/advanced/abi.js'
 import { useState } from "preact/hooks"
 import { JSX } from "preact/jsx-runtime"
-import { Wallet, toMicroWeb3 } from "../library/ethereum.js"
+import { Wallet, toMicroEthSigner } from "../library/ethereum.js"
 import { useAsyncState, useOptionalSignal } from "../library/preact-utilities.js"
 import { ETH_ADDRESS, TokenDetails, addToken, assetsArray, removeToken } from "../library/tokens.js"
 import { bigintToDecimalString } from "../library/utilities.js"
@@ -26,7 +25,7 @@ export function Balances(model: BalancesModel) {
 			if (address === ETH_ADDRESS) {
 				return model.wallet.value.ethereumClient.getBalance(model.wallet.value.address, 'latest')
 			} else {
-				return contract(ERC20, toMicroWeb3(model.wallet.value.ethereumClient), addressBigintToHex(address)).balanceOf.call(addressBigintToHex(model.wallet.value.address))
+				return createContract(ERC20, toMicroEthSigner(model.wallet.value.ethereumClient), addressBigintToHex(address)).balanceOf.call(addressBigintToHex(model.wallet.value.address))
 			}
 		})
 		useSignalEffect(refresh)

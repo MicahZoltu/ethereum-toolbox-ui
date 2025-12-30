@@ -1,10 +1,12 @@
 import { batch, Signal, useSignal, useSignalEffect } from "@preact/signals";
-import { JSX } from "preact/jsx-runtime";
+import { InputHTMLAttributes, TargetedEvent } from "preact";
 import { OptionalSignal } from "../library/preact-utilities.js";
+import { MappedOmit } from "../library/typescript.js";
 
-export interface BaseInputModel extends Omit<JSX.HTMLAttributes<HTMLInputElement>, 'value' | 'onInput' | 'onInput'> {
+export interface BaseInputModel extends MappedOmit<InputHTMLAttributes, 'value' | 'onInput' | 'onInput'> {
 	readonly rawValue?: Signal<string>
 }
+
 export interface UnparsedInputModel extends BaseInputModel {
 	readonly value: Signal<string>
 	readonly sanitize?: (input: string) => string
@@ -42,7 +44,7 @@ function ParsedInput<T>(model: ParsedInputModel<T>) {
 		})
 	})
 
-	function onChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
+	function onChange(event: TargetedEvent<HTMLInputElement, Event>) {
 		if (!pendingOnChange.peek()) return
 		if (!model.onChange) return
 		pendingOnChange.value = false

@@ -1,7 +1,7 @@
-import { JSX } from 'preact/jsx-runtime'
+import { CSSProperties, HTMLInputTypeAttribute, SignalLike } from 'preact'
+import { OptionalSignal } from '../library/preact-utilities.js'
 import { AutosizingInput, ParsedAutosizingInputModel, UnparsedAutosizingInputModel } from './AutosizingInput.js'
 import { Input, ParsedInputModel, UnparsedInputModel } from './Input.js'
-import { OptionalSignal } from '../library/preact-utilities.js'
 
 const sanitizationRegexp = /[^\d]/g
 const regexp = /^\d*$/
@@ -9,11 +9,11 @@ const regexp = /^\d*$/
 export interface IntegerInput {
 	readonly value: OptionalSignal<bigint>
 	readonly autoSize?: boolean
-	readonly className?: string | JSX.SignalLike<string | undefined>
-	readonly style?: string | JSX.CSSProperties | JSX.SignalLike<string | JSX.CSSProperties>
-	readonly type?: string | JSX.SignalLike<string>
-	readonly placeholder?: string | JSX.SignalLike<string>
-	readonly required?: boolean | JSX.SignalLike<boolean>
+	readonly className?: string | SignalLike<string | undefined>
+	readonly style?: string | CSSProperties | SignalLike<string | CSSProperties>
+	readonly type?: HTMLInputTypeAttribute
+	readonly placeholder?: string | SignalLike<string>
+	readonly required?: boolean | SignalLike<boolean>
 	readonly dataList?: string[]
 	readonly onChange?: () => void
 }
