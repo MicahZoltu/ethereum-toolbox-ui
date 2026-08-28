@@ -12,11 +12,11 @@
 			"label": "tsc: watch - tsconfig.json"
 		},
 		{
-			"type": "npm",
-			"script": "serve",
+			"type": "shell",
+			"command": "bun run serve",
 			"problemMatcher": [],
-			"label": "npm: serve",
-			"detail": "Serve the app via local simple file server."
+			"label": "bun: serve",
+			"detail": "Serve the app via Bun's local file server."
 		}
 	]
 }

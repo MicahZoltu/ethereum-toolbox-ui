@@ -1,9 +1,7 @@
-import * as path from 'path'
-import * as url from 'url';
-import { promises as fs } from 'fs'
+import * as path from 'node:path'
 import { FileType, recursiveDirectoryCopy } from '@zoltu/file-copier'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
+const directoryOfThisFile = import.meta.dir
 
 const dependencyPaths = [
 	{ packageName: 'preact', subfolderToVendor: '.', mainEntrypointFile: 'dist/preact.mjs', alternateEntrypoints: { 'jsx-runtime': 'jsx-runtime/dist/jsxRuntime.mjs', 'hooks': 'hooks/dist/hooks.mjs', 'debug': 'debug/dist/debug.mjs', 'devtools': 'devtools/dist/devtools.mjs' } },
@@ -41,7 +39,7 @@ async function vendorDependencies() {
 	}
 
 	const indexHtmlPath = path.join(directoryOfThisFile, '..', 'app', 'index.html')
-	const oldIndexHtml = await fs.readFile(indexHtmlPath, 'utf8')
+	const oldIndexHtml = await Bun.file(indexHtmlPath).text()
 	const importmap = dependencyPaths.reduce((importmap, { packageName, mainEntrypointFile, alternateEntrypoints }) => {
 		importmap.imports[packageName] = `./vendor/${packageName}/${mainEntrypointFile}`
 		for (const [alternateEntrypointName, alternateEntrypointFile] of Object.entries(alternateEntrypoints)) {
@@ -52,7 +50,7 @@ async function vendorDependencies() {
 	const importmapJson = JSON.stringify(importmap, undefined, '\t')
 		.replace(/^/mg, '\t\t')
 	const newIndexHtml = oldIndexHtml.replace(/<script type='importmap'>[\s\S]*?<\/script>/m, `<script type='importmap'>\n${importmapJson}\n\t</script>`)
-	await fs.writeFile(indexHtmlPath, newIndexHtml)
+	await Bun.write(indexHtmlPath, newIndexHtml)
 }
 
 vendorDependencies().catch(error => {

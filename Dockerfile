@@ -1,4 +1,4 @@
-FROM node:22.13.0-alpine3.20@sha256:2e897832d17a0670bb7ef7c2b4df7f2e6c3d561b5aaa2be89ff4bc12fb698e67 as builder
+FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 as builder
 
 RUN apk add --no-cache git
 
@@ -10,7 +10,7 @@ RUN git remote add origin https://github.com/MicahZoltu/ethereum-toolbox-ui.git
 RUN git fetch --depth 1 origin $COMMIT_HASH
 RUN git checkout FETCH_HEAD
 WORKDIR /source
-RUN npm run setup
+RUN bun run setup
 
 # --------------------------------------------------------
 # Base Image: Create the base image that will host the app
